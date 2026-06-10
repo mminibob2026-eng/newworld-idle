@@ -1,0 +1,161 @@
+'use client'
+
+import { useAuth } from '@/components/auth-provider'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase'
+
+type Character = any
+
+export default function Dashboard() {
+  const { user, loading, signOut } = useAuth()
+  const router = useRouter()
+  const [characters, setCharacters] = useState<Character[]>([])
+  const [loadingChars, setLoadingChars] = useState(true)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!user && !loading) router.push('/')
+    if (user) loadCharacters()
+  }, [user, loading, router])
+
+  const loadCharacters = async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('account_id', user!.id)
+      .order('created_at', { ascending: true })
+    setCharacters(data ?? [])
+    setLoadingChars(false)
+  }
+
+  const createCharacter = async () => {
+    setError('')
+    if (!newName.trim()) return
+    const supabase = createClient()
+    const { count } = await supabase
+      .from('characters')
+      .select('*', { count: 'exact', head: true })
+      .eq('account_id', user!.id)
+
+    if (count && count >= 4) {
+      setError('Maximum 4 characters per account')
+      return
+    }
+
+    const { error: err } = await supabase
+      .from('characters')
+      .insert({ account_id: user!.id, name: newName.trim() } as any)
+
+    if (err) {
+      setError(err.message)
+      return
+    }
+
+    setNewName('')
+    setShowCreate(false)
+    loadCharacters()
+  }
+
+  const deleteCharacter = async (id: string) => {
+    const supabase = createClient()
+    await (supabase as any).from('characters').delete().eq('id', id)
+    loadCharacters()
+  }
+
+  if (loading || loadingChars) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <span style={{ color: '#0ff' }}>LOADING...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h1 style={{ color: '#0ff', fontSize: '16px', letterSpacing: '2px', margin: 0 }}>
+          NEW WORLD IDLE
+        </h1>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ color: '#888', fontSize: '11px' }}>{user?.email}</span>
+          <button onClick={signOut} className="btn-danger" style={{ fontSize: '10px', padding: '3px 8px' }}>
+            LOGOUT
+          </button>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: '16px' }}>
+        <div className="panel-header">SELECT CHARACTER</div>
+        <p style={{ color: '#888', fontSize: '11px', marginBottom: '12px' }}>
+          Choose a character to enter the world. {characters.length}/4 slots used.
+        </p>
+
+        <div className="feature-grid">
+          {characters.map(char => (
+            <div
+              key={char.id}
+              className="card"
+              onClick={() => router.push(`/world?char=${char.id}`)}
+            >
+              <div style={{ color: '#0ff', fontWeight: 'bold', fontSize: '13px' }}>{char.name}</div>
+              <div style={{ color: '#888', fontSize: '10px', marginTop: '4px' }}>
+                Lv.{char.level} | {char.region.replace('_', ' ')}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', marginTop: '6px', fontSize: '10px' }}>
+                <span style={{ color: '#888' }}>STR {char.strength}</span>
+                <span style={{ color: '#888' }}>DEX {char.dexterity}</span>
+                <span style={{ color: '#888' }}>INT {char.intelligence}</span>
+              </div>
+              <button
+                className="btn-danger"
+                style={{ fontSize: '9px', padding: '2px 6px', marginTop: '8px' }}
+                onClick={e => { e.stopPropagation(); deleteCharacter(char.id) }}
+              >
+                DELETE
+              </button>
+            </div>
+          ))}
+
+          {characters.length < 4 && !showCreate && (
+            <div
+              className="card"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80px', cursor: 'pointer', borderStyle: 'dashed' }}
+              onClick={() => setShowCreate(true)}
+            >
+              <span style={{ color: '#555', fontSize: '24px' }}>+</span>
+            </div>
+          )}
+        </div>
+
+        {showCreate && (
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+            <input
+              placeholder="Character name..."
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              maxLength={20}
+              style={{ flex: 1 }}
+              onKeyDown={e => e.key === 'Enter' && createCharacter()}
+            />
+            <button onClick={createCharacter} className="btn-green">CREATE</button>
+            <button onClick={() => setShowCreate(false)} className="btn-danger">CANCEL</button>
+          </div>
+        )}
+
+        {error && <p style={{ color: '#f44', fontSize: '11px', marginTop: '8px' }}>{error}</p>}
+      </div>
+
+      <div className="panel" style={{ marginBottom: '16px' }}>
+        <div className="panel-header">ACCOUNT</div>
+        <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: '#888' }}>
+          <span>Bob Coins: <span style={{ color: '#ff0' }}>0</span></span>
+          <span>Bob Pass: <span style={{ color: '#888' }}>Free</span></span>
+        </div>
+      </div>
+    </div>
+  )
+}
