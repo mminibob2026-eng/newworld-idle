@@ -10,6 +10,8 @@ import { ProfessionTab } from '@/components/profession-tab'
 import { ExplorationTab } from '@/components/exploration-tab'
 import { ContractsTab } from '@/components/contracts-tab'
 import { StorageView } from '@/components/storage-view'
+import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
+import { playReward, playLevelUp } from '@/lib/sound'
 
 type Character = any
 type Profession = any
@@ -36,12 +38,52 @@ function WorldPage() {
   const [loadingChar, setLoadingChar] = useState(true)
   const [activeTab, setActiveTab] = useState<Tab>('gathering')
   const [notification, setNotification] = useState('')
+  const [notificationType, setNotificationType] = useState<'info' | 'success' | 'error'>('info')
+  const { rewards, addReward } = useRewardFeed()
 
   useEffect(() => {
     if (!user && !loading) router.push('/')
     if (!charId && !loading) router.push('/dashboard')
-    if (user && charId) loadCharacter(charId)
+    if (user && charId) {
+      loadCharacter(charId)
+      processOffline(charId)
+    }
   }, [user, charId, loading, router])
+
+  const processOffline = async (id: string) => {
+    try {
+      const res = await fetch(`/api/game/process-offline?character_id=${id}`)
+      const data = await res.json()
+      if (data.professions?.length > 0 || data.explorations?.length > 0) {
+        const profCount = data.professions?.length || 0
+        const expCount = data.explorations?.length || 0
+        notify(`Offline progress: ${profCount} professions, ${expCount} explorations completed!`)
+        playReward()
+
+        for (const p of data.professions || []) {
+          addReward({
+            type: 'profession',
+            items: Object.entries(p.items || {}).map(([id, info]: any) => ({
+              name: info.name || id,
+              qty: info.qty || info,
+              rarity: info.rarity || 'common',
+            })),
+            xp: p.xpGained || 0,
+          })
+        }
+        for (const e of data.explorations || []) {
+          addReward({
+            type: 'exploration',
+            items: e.discoveries?.map((d: any) => ({ name: d.name, qty: 1, rarity: d.rarity || 'common' })) || [],
+            gold: e.gold || 0,
+          })
+        }
+        loadCharacter(id)
+      }
+    } catch {
+      // silent
+    }
+  }
 
   const loadCharacter = async (id: string) => {
     const supabase = createClient()
@@ -69,9 +111,10 @@ function WorldPage() {
     setLoadingChar(false)
   }
 
-  const notify = useCallback((msg: string) => {
+  const notify = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
     setNotification(msg)
-    setTimeout(() => setNotification(''), 3000)
+    setNotificationType(type)
+    setTimeout(() => setNotification(''), 4000)
   }, [])
 
   if (loading || loadingChar || !character) {
@@ -96,11 +139,14 @@ function WorldPage() {
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto', padding: '10px' }}>
+      <RewardFeed rewards={rewards} />
+
       {notification && (
         <div style={{
           position: 'fixed', top: '10px', right: '10px', zIndex: 999,
-          background: 'var(--bg-tertiary)', border: '1px solid #0ff',
-          color: '#0ff', padding: '8px 14px', fontSize: '12px',
+          background: 'var(--bg-tertiary)', border: `1px solid ${notificationType === 'error' ? 'var(--red)' : notificationType === 'success' ? 'var(--green)' : 'var(--accent)'}`,
+          color: notificationType === 'error' ? 'var(--red)' : notificationType === 'success' ? 'var(--green)' : 'var(--accent)',
+          padding: '8px 14px', fontSize: '12px',
           animation: 'toastIn 0.3s ease',
         }}>
           {notification}
@@ -211,14 +257,14 @@ function WorldPage() {
           />
         )}
         {activeTab === 'character' && (
-          <CharacterTab character={character} onRefresh={() => loadCharacter(character.id)} />
+          <CharacterTab character={character} onRefresh={() => loadCharacter(character.id)} notify={notify} />
         )}
       </div>
     </div>
   )
 }
 
-function CharacterTab({ character, onRefresh }: { character: Character; onRefresh: () => void }) {
+function CharacterTab({ character, onRefresh, notify }: { character: Character; onRefresh: () => void; notify: (msg: string, type?: 'info' | 'success' | 'error') => void }) {
   const attrs = [
     { key: 'strength', label: 'STR', desc: 'Gathering power & carrying capacity' },
     { key: 'dexterity', label: 'DEX', desc: 'Crafting speed & precision' },
@@ -230,14 +276,17 @@ function CharacterTab({ character, onRefresh }: { character: Character; onRefres
 
   const assignPoint = async (attr: string) => {
     if (!character.attribute_points) return
-    const supabase = createClient()
-    await (supabase as any)
-      .from('characters')
-      .update({
-        [attr]: (character as any)[attr] + 1,
-        attribute_points: character.attribute_points - 1,
-      })
-      .eq('id', character.id)
+    const res = await fetch('/api/game/assign-attribute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId: character.id, attribute: attr }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
+      return
+    }
+    notify(`+1 ${attr.toUpperCase()}`, 'success')
     onRefresh()
   }
 

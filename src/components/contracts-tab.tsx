@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { playClick, playReward } from '@/lib/sound'
 
 type Contract = any
 type StorageItem = any
@@ -37,6 +38,7 @@ export function ContractsTab({
   }
 
   const generateContracts = async () => {
+    playClick()
     const supabase = createClient()
     const { data: templates } = await supabase
       .from('content_contracts')
@@ -65,7 +67,7 @@ export function ContractsTab({
       }
     })
 
-    const { error } = await supabase.from('contracts').insert(newContracts)
+    const { error } = await (supabase as any).from('contracts').insert(newContracts)
     if (error) {
       notify(`Error: ${error.message}`)
       return
@@ -76,48 +78,46 @@ export function ContractsTab({
   }
 
   const completeContract = async (contractId: string) => {
-    const supabase = createClient()
-    const contract = contracts.find(c => c.id === contractId)
-    if (!contract) return
-
-    const storageItem = storage.find(s => s.item_id === contract.requirement_item)
-    if (!storageItem || storageItem.quantity < contract.requirement_qty) {
-      notify(`Need ${contract.requirement_qty}x ${contract.requirement_item}. Have ${storageItem?.quantity || 0}`)
+    playClick()
+    const res = await fetch('/api/game/complete-contract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
+    playReward()
+    notify(`Completed! +${data.gold} Gold${data.knowledge > 0 ? `, +${data.knowledge} KP` : ''}`)
+    loadContracts()
+    onRefresh()
+  }
 
-    await supabase
-      .from('storage')
-      .update({ quantity: storageItem.quantity - contract.requirement_qty })
-      .eq('id', storageItem.id)
-
-    const { data: char } = await supabase
-      .from('characters')
-      .select('gold, knowledge')
-      .eq('id', characterId)
-      .single()
-
-    if (char) {
-      await supabase
-        .from('characters')
-        .update({
-          gold: char.gold + contract.reward_gold,
-          knowledge: (char.knowledge || 0) + contract.reward_knowledge,
-        })
-        .eq('id', characterId)
+  const rerollContract = async (contractId: string) => {
+    playClick()
+    const res = await fetch('/api/game/reroll-contract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
+      return
     }
-
-    await supabase
-      .from('contracts')
-      .update({ completed: true })
-      .eq('id', contractId)
-
-    notify(`Completed! +${contract.reward_gold} Gold${contract.reward_knowledge > 0 ? `, +${contract.reward_knowledge} KP` : ''}`)
+    notify(`Re-rolled! New: ${data.requirement_item} x${data.requirement_qty} for ${data.reward_gold} Gold`)
     loadContracts()
     onRefresh()
   }
 
   if (loading) return <div style={{ color: '#888' }}>Loading contracts...</div>
+
+  const getItemName = (itemId: string) => {
+    const item = storage.find((s: any) => s.item_id === itemId)
+    return item?.content_items?.name || itemId.replace(/_/g, ' ')
+  }
 
   return (
     <div>
@@ -138,16 +138,21 @@ export function ContractsTab({
         </div>
       )}
 
+      {!generated && contracts.length === 0 && (
+        <div style={{ color: '#555', fontSize: '11px', textAlign: 'center', padding: '20px' }}>
+          Generate contracts to start working.
+        </div>
+      )}
+
       <div className="feature-grid">
         {contracts.filter(c => !c.completed).map(contract => {
-          const storageItem = storage.find(s => s.item_id === contract.requirement_item)
+          const storageItem = storage.find((s: any) => s.item_id === contract.requirement_item)
           const hasEnough = storageItem && storageItem.quantity >= contract.requirement_qty
-          const factionName = contract.faction.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
 
           return (
             <div key={contract.id} className="card" style={{ borderColor: hasEnough ? 'var(--accent)' : 'var(--border)' }}>
               <div style={{ fontSize: '11px', color: '#0ff', fontWeight: 'bold' }}>
-                Deliver: {contract.requirement_item.replace(/_/g, ' ')}
+                Deliver: {getItemName(contract.requirement_item)}
               </div>
               <div style={{ fontSize: '11px', marginTop: '4px' }}>
                 Qty: <span style={{ color: hasEnough ? '#0f0' : '#f44' }}>{contract.requirement_qty}</span>
@@ -157,14 +162,22 @@ export function ContractsTab({
                 <span style={{ color: '#ff0' }}>{contract.reward_gold} Gold</span>
                 {contract.reward_knowledge > 0 && <span style={{ color: '#f0f' }}> | {contract.reward_knowledge} KP</span>}
               </div>
-              <div style={{ fontSize: '9px', color: '#555', marginTop: '2px' }}>{factionName}</div>
-              <button
-                style={{ fontSize: '10px', marginTop: '8px', width: '100%' }}
-                disabled={!hasEnough}
-                onClick={() => completeContract(contract.id)}
-              >
-                COMPLETE
-              </button>
+              <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                <button
+                  style={{ fontSize: '10px', flex: 1 }}
+                  disabled={!hasEnough}
+                  onClick={() => completeContract(contract.id)}
+                >
+                  COMPLETE
+                </button>
+                <button
+                  style={{ fontSize: '10px', flex: 0, padding: '4px 8px' }}
+                  onClick={() => rerollContract(contract.id)}
+                  title="Re-roll contract (costs gold)"
+                >
+                  ↻
+                </button>
+              </div>
             </div>
           )
         })}

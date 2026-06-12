@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { RARITY_COLORS } from '@/lib/game-data'
+import { playClick, playReward, playLevelUp } from '@/lib/sound'
 
 type Profession = any
 type ContentProfession = any
@@ -52,6 +53,7 @@ export function ProfessionTab({
   }
 
   const learnProfession = async (professionId: string) => {
+    playClick()
     const supabase = createClient()
     const { error } = await supabase
       .from('professions')
@@ -65,127 +67,57 @@ export function ProfessionTab({
   }
 
   const startProfession = async (professionId: string) => {
-    const supabase = createClient()
-    const now = new Date()
-    const finishAt = new Date(now.getTime() + 30 * 60 * 1000)
-
-    const { error } = await supabase
-      .from('professions')
-      .update({
-        is_active: true,
-        started_at: now.toISOString(),
-        finish_at: finishAt.toISOString(),
-      })
-      .eq('character_id', characterId)
-      .eq('profession', professionId)
-
-    if (error) {
-      notify(`Error: ${error.message}`)
+    playClick()
+    const res = await fetch('/api/game/start-profession', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId, professionId, durationMinutes: 30 }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
-    notify(`Started ${available.find(p => p.id === professionId)?.name}! Come back in 30 min.`)
+    notify(`Started ${available.find(p => p.id === professionId)?.name}! ETA: ${Math.floor(data.actualDuration)} min`)
     onRefresh()
   }
 
   const claimProfession = async (professionId: string) => {
-    const supabase = createClient()
-    const prof = professions.find(p => p.profession === professionId)
-    if (!prof || !prof.is_active) return
-
-    const now = new Date()
-    if (new Date(prof.finish_at!) > now) {
-      notify('Still in progress!')
+    playClick()
+    const res = await fetch('/api/game/claim-profession', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId, professionId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
+    const itemSummary = Object.values(data.items).map((i: any) => `${i.name}x${i.qty}`).join(', ')
 
-    const elapsedSeconds = Math.floor((now.getTime() - new Date(prof.started_at!).getTime()) / 1000)
-    const { data: profData } = await supabase
-      .from('content_professions')
-      .select('base_time_seconds, base_xp_per_action')
-      .eq('id', professionId)
-      .single()
-
-    if (!profData) return
-
-    const actions = Math.min(
-      Math.floor(elapsedSeconds / profData.base_time_seconds),
-      Math.floor((24 * 3600) / profData.base_time_seconds)
+    const hasRare = Object.values(data.items).some((i: any) =>
+      ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity)
     )
+    if (hasRare) playReward()
+    if (data.charLeveledUp) playLevelUp()
 
-    if (actions <= 0) {
-      notify('No time has passed yet.')
-      return
-    }
-
-    const xpGained = actions * profData.base_xp_per_action
-    const profRewards = rewards[professionId] || []
-    const items: Record<string, { name: string; qty: number; rarity: string }> = {}
-
-    for (let i = 0; i < actions; i++) {
-      if (profRewards.length === 0) continue
-      const totalWeight = profRewards.reduce((sum, r) => sum + r.weight, 0)
-      let roll = Math.floor(Math.random() * totalWeight)
-      for (const reward of profRewards) {
-        roll -= reward.weight
-        if (roll < 0) {
-          const qty = Math.floor(Math.random() * (reward.max_qty - reward.min_qty + 1)) + reward.min_qty
-          const itemName = reward.content_items?.name || reward.item_id
-          if (items[reward.item_id]) {
-            items[reward.item_id].qty += qty
-          } else {
-            items[reward.item_id] = { name: itemName, qty, rarity: reward.content_items?.rarity || 'common' }
-          }
-          break
-        }
-      }
-    }
-
-    for (const [itemId, info] of Object.entries(items)) {
-      const { data: existing } = await supabase
-        .from('storage')
-        .select('*')
-        .eq('account_id', accountId)
-        .eq('item_type', 'item')
-        .eq('item_id', itemId)
-        .single()
-
-      if (existing) {
-        await supabase
-          .from('storage')
-          .update({ quantity: existing.quantity + info.qty })
-          .eq('id', existing.id)
-      } else {
-        await supabase
-          .from('storage')
-          .insert({ account_id: accountId, item_type: 'item', item_id: itemId, quantity: info.qty })
-      }
-    }
-
-    const xpNeeded = Math.floor(100 * Math.pow(prof.level, 1.5))
-    const newXp = prof.xp + xpGained
-    const levelUps = Math.floor(newXp / xpNeeded)
-
-    await supabase
-      .from('professions')
-      .update({
-        level: prof.level + levelUps,
-        xp: newXp % xpNeeded,
-        is_active: false,
-        started_at: null,
-        finish_at: null,
-      })
-      .eq('id', prof.id)
-
-    const itemSummary = Object.values(items).map(i => `${i.name}x${i.qty}`).join(', ')
-    notify(`[${prof.profession}] +${xpGained} XP | Got: ${itemSummary || 'nothing'}`)
+    notify(`[${professionId}] +${data.xpGained} XP | Got: ${itemSummary || 'nothing'}`)
     onRefresh()
   }
 
   if (loading) return <div style={{ color: '#888' }}>Loading professions...</div>
 
+  const activeCount = professions.filter(p => p.is_active).length
+
   return (
     <div>
       <div className="panel-header">{category.toUpperCase()}</div>
+      {activeCount > 0 && (
+        <div style={{ color: '#888', fontSize: '10px', marginBottom: '6px' }}>
+          {activeCount} active session{activeCount > 1 ? 's' : ''} across all professions
+        </div>
+      )}
       {available.length === 0 && <div style={{ color: '#555', fontSize: '11px' }}>No professions available.</div>}
 
       <div className="feature-grid">
@@ -194,7 +126,7 @@ export function ProfessionTab({
           const profRewards = rewards[prof.id] || []
 
           return (
-            <div key={prof.id} className={`card ${learned?.is_active ? 'active' : ''}`}>
+            <div key={prof.id} className={`card ${learned?.is_active ? 'active pulsing' : ''} ${learned && !learned.is_active ? '' : ''}`}>
               <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{prof.name}</div>
               <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{prof.description}</div>
 

@@ -253,6 +253,76 @@ button:disabled {
   75% { content: '...'; }
 }
 
+/* Reward burst animation */
+.reward-burst {
+  animation: rewardIn 0.4s ease, rewardPulse 1s ease 0.4s;
+}
+
+@keyframes rewardIn {
+  0% { opacity: 0; transform: scale(0.5); }
+  60% { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes rewardPulse {
+  0%, 100% { box-shadow: 0 0 10px var(--accent-glow); }
+  50% { box-shadow: 0 0 25px var(--accent-glow); }
+}
+
+/* Rarity flash */
+.reward-item {
+  animation: rarityFlash 1s ease;
+}
+
+@keyframes rarityFlash {
+  0% { text-shadow: 0 0 10px currentColor; }
+  100% { text-shadow: none; }
+}
+
+/* Level up pulse */
+@keyframes levelPulse {
+  0% { text-shadow: 0 0 5px var(--accent); transform: scale(1); }
+  100% { text-shadow: 0 0 20px var(--accent); transform: scale(1.1); }
+}
+
+/* Card completed glow */
+.card.completed {
+  animation: completedFlash 0.6s ease;
+  border-color: var(--green) !important;
+}
+
+@keyframes completedFlash {
+  0% { box-shadow: 0 0 0 rgba(0, 255, 0, 0); }
+  50% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); }
+  100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.2); }
+}
+
+/* Active session pulse border */
+.card.pulsing {
+  animation: borderPulse 2s ease infinite;
+}
+
+@keyframes borderPulse {
+  0%, 100% { border-color: var(--accent); }
+  50% { border-color: rgba(0, 255, 255, 0.3); }
+}
+
+/* Explorer badge */
+.exploring-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 9px;
+  animation: exploringPulse 1.5s ease infinite alternate;
+}
+
+@keyframes exploringPulse {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
 /* Mobile first */
 @media (max-width: 600px) {
   body { font-size: 12px; }

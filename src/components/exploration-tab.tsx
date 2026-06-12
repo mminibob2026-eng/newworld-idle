@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { playClick, playReward } from '@/lib/sound'
 
 type Region = any
 type Exploration = any
@@ -34,93 +35,42 @@ export function ExplorationTab({
   }
 
   const startExploration = async (regionId: string) => {
-    const supabase = createClient()
+    playClick()
     const region = regions.find(r => r.id === regionId)
     if (!region) return
 
-    const now = new Date()
-    const finishAt = new Date(now.getTime() + region.exploration_base_time * 60 * 1000)
-
-    const { error } = await supabase
-      .from('exploration')
-      .insert({
-        character_id: characterId,
-        region: regionId,
-        started_at: now.toISOString(),
-        finish_at: finishAt.toISOString(),
-        completed: false,
-      })
-
-    if (error) {
-      notify(`Error: ${error.message}`)
+    const res = await fetch('/api/game/start-exploration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId, regionId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
-    notify(`Exploring ${region.name}! ETA: ${region.exploration_base_time} min`)
+    notify(`Exploring ${region.name}! ETA: ${data.actualDuration} min`)
     loadData()
   }
 
   const claimExploration = async (explorationId: string) => {
-    const supabase = createClient()
-    const { data: exp } = await supabase
-      .from('exploration')
-      .select('*')
-      .eq('id', explorationId)
-      .single()
-
-    if (!exp) return
-
-    const now = new Date()
-    if (new Date(exp.finish_at) > now) {
-      notify('Still exploring!')
+    playClick()
+    const res = await fetch('/api/game/claim-exploration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ explorationId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
-
-    const { data: discoveries } = await supabase
-      .from('content_region_discoveries')
-      .select('*, content_discoveries(*)')
-      .eq('region_id', exp.region)
-
-    const found: any[] = []
-    if (discoveries) {
-      const totalWeight = discoveries.reduce((sum, d) => sum + d.weight, 0)
-      for (let i = 0; i < 3; i++) {
-        if (Math.random() > 0.4) continue
-        let roll = Math.floor(Math.random() * totalWeight)
-        for (const disc of discoveries) {
-          roll -= disc.weight
-          if (roll < 0) {
-            found.push(disc.content_discoveries)
-            break
-          }
-        }
+    if (data.discoveries && data.discoveries.length > 0) {
+      const names = data.discoveries.map((d: any) => d.name).join(', ')
+      notify(`Discovered: ${names}${data.gold > 0 ? ` (+${data.gold} Gold)` : ''}`)
+      if (data.discoveries.some((d: any) => d.rarity === 'rare' || d.rarity === 'epic' || d.rarity === 'legendary' || d.rarity === 'mythic')) {
+        playReward()
       }
-    }
-
-    const value = found.reduce((sum, d) => sum + (d.base_value || 0), 0)
-
-    await supabase
-      .from('exploration')
-      .update({ completed: true, discoveries: found })
-      .eq('id', explorationId)
-
-    if (value > 0) {
-      const { data: char } = await supabase
-        .from('characters')
-        .select('gold')
-        .eq('id', characterId)
-        .single()
-
-      if (char) {
-        await supabase
-          .from('characters')
-          .update({ gold: char.gold + value })
-          .eq('id', characterId)
-      }
-    }
-
-    if (found.length > 0) {
-      const names = found.map((d: any) => d.name).join(', ')
-      notify(`Discovered: ${names}${value > 0 ? ` (+${value} Gold)` : ''}`)
     } else {
       notify('Nothing special found this time.')
     }
@@ -129,40 +79,54 @@ export function ExplorationTab({
 
   if (loading) return <div style={{ color: '#888' }}>Loading regions...</div>
 
-  const activeExp = explorations.find(e => !e.completed)
+  const activeExps = explorations.filter(e => !e.completed)
 
   return (
     <div>
       <div className="panel-header">EXPLORATION</div>
 
-      {activeExp && (
-        <div className="card active" style={{ marginBottom: '12px' }}>
-          <div style={{ color: '#0ff', fontSize: '12px' }}>
-            Exploring: {regions.find(r => r.id === activeExp.region)?.name || activeExp.region}
+      {activeExps.length > 0 && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ color: '#888', fontSize: '10px', marginBottom: '6px' }}>
+            Active explorations ({activeExps.length}):
           </div>
-          <div className="progress-bar" style={{ marginTop: '6px' }}>
-            <div className="progress-fill gold" style={{
-              width: `${Math.min(100, ((Date.now() - new Date(activeExp.started_at).getTime()) / (new Date(activeExp.finish_at).getTime() - new Date(activeExp.started_at).getTime())) * 100)}%`
-            }} />
-          </div>
-          <button
-            style={{ fontSize: '10px', marginTop: '8px', width: '100%' }}
-            onClick={() => claimExploration(activeExp.id)}
-          >
-            CLAIM
-          </button>
+          {activeExps.slice(0, 3).map(exp => {
+            const region = regions.find(r => r.id === exp.region)
+            const elapsed = Date.now() - new Date(exp.started_at).getTime()
+            const total = new Date(exp.finish_at).getTime() - new Date(exp.started_at).getTime()
+            const pct = Math.min(100, (elapsed / total) * 100)
+            return (
+              <div key={exp.id} className="card active" style={{ marginBottom: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#0ff', fontSize: '11px' }}>
+                    {region?.name || exp.region}
+                  </span>
+                  <span className="exploring-badge">IN PROGRESS</span>
+                </div>
+                <div className="progress-bar" style={{ marginTop: '6px' }}>
+                  <div className="progress-fill gold" style={{ width: `${pct}%` }} />
+                </div>
+                <button
+                  style={{ fontSize: '10px', marginTop: '6px', width: '100%' }}
+                  onClick={() => claimExploration(exp.id)}
+                >
+                  CLAIM
+                </button>
+              </div>
+            )
+          })}
+          {activeExps.length > 3 && (
+            <div style={{ color: '#555', fontSize: '10px' }}>
+              +{activeExps.length - 3} more in queue
+            </div>
+          )}
         </div>
       )}
 
       <div className="feature-grid">
         {regions.map(region => {
-          const isExploring = activeExp?.region === region.id
           return (
-            <div
-              key={region.id}
-              className="card"
-              style={{ opacity: isExploring ? 0.5 : 1 }}
-            >
+            <div key={region.id} className="card">
               <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{region.name}</div>
               <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{region.description}</div>
               <div style={{ fontSize: '10px', marginTop: '6px', color: '#888' }}>
@@ -173,11 +137,9 @@ export function ExplorationTab({
                   Cost: {region.unlock_cost_gold.toLocaleString()} Gold
                 </div>
               )}
-              {!isExploring && !activeExp && (
-                <button style={{ fontSize: '10px', marginTop: '8px', width: '100%' }} onClick={() => startExploration(region.id)}>
-                  EXPLORE
-                </button>
-              )}
+              <button style={{ fontSize: '10px', marginTop: '8px', width: '100%' }} onClick={() => startExploration(region.id)}>
+                EXPLORE
+              </button>
             </div>
           )
         })}
