@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
         .eq('id', exp.character_id)
     }
 
+    for (const d of found) {
+      await supabase
+        .from('player_discoveries')
+        .insert({ account_id: char.account_id, discovery_id: d.id })
+        .select()
+        .maybeSingle()
+    }
+
     await supabase.from('game_logs').insert({
       account_id: char.account_id,
       character_id: exp.character_id,

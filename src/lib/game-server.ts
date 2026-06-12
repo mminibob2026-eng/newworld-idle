@@ -200,6 +200,14 @@ export async function processOfflineProgress(characterId: string) {
       .update({ completed: true, discoveries: found })
       .eq('id', exp.id)
 
+    for (const d of found) {
+      await supabase
+        .from('player_discoveries')
+        .insert({ account_id: char.account_id, discovery_id: d.id })
+        .select()
+        .maybeSingle()
+    }
+
     if (value > 0) {
       await supabase
         .from('characters')

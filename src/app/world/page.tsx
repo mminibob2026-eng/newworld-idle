@@ -10,13 +10,15 @@ import { ProfessionTab } from '@/components/profession-tab'
 import { ExplorationTab } from '@/components/exploration-tab'
 import { ContractsTab } from '@/components/contracts-tab'
 import { StorageView } from '@/components/storage-view'
+import { DashboardTab } from '@/components/dashboard-tab'
+import { DiscoveriesTab } from '@/components/discoveries-tab'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
 import { playReward, playLevelUp } from '@/lib/sound'
 
 type Character = any
 type Profession = any
 
-type Tab = 'gathering' | 'production' | 'exploration' | 'contracts' | 'storage' | 'character'
+type Tab = 'dashboard' | 'gathering' | 'production' | 'exploration' | 'contracts' | 'storage' | 'discoveries' | 'character'
 
 export default function WorldPageWrapper() {
   return (
@@ -36,7 +38,7 @@ function WorldPage() {
   const [storage, setStorage] = useState<any[]>([])
   const [professions, setProfessions] = useState<Profession[]>([])
   const [loadingChar, setLoadingChar] = useState(true)
-  const [activeTab, setActiveTab] = useState<Tab>('gathering')
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [notification, setNotification] = useState('')
   const [notificationType, setNotificationType] = useState<'info' | 'success' | 'error'>('info')
   const { rewards, addReward } = useRewardFeed()
@@ -129,11 +131,13 @@ function WorldPage() {
   const kpIcon = '⚡'
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: 'dashboard', label: 'HOME' },
     { id: 'gathering', label: 'GATHER' },
     { id: 'production', label: 'CRAFT' },
     { id: 'exploration', label: 'EXPLORE' },
     { id: 'contracts', label: 'CONTRACTS' },
     { id: 'storage', label: 'STORAGE' },
+    { id: 'discoveries', label: 'DISCOVER' },
     { id: 'character', label: 'CHAR' },
   ]
 
@@ -216,6 +220,13 @@ function WorldPage() {
 
       {/* Tab Content */}
       <div className="panel" style={{ minHeight: '300px' }}>
+        {activeTab === 'dashboard' && (
+          <DashboardTab
+            character={character}
+            professions={professions}
+            onRefresh={() => loadCharacter(character.id)}
+          />
+        )}
         {activeTab === 'gathering' && (
           <ProfessionTab
             category="gathering"
@@ -254,6 +265,11 @@ function WorldPage() {
           <StorageView
             storage={storage}
             onRefresh={() => loadCharacter(character.id)}
+          />
+        )}
+        {activeTab === 'discoveries' && (
+          <DiscoveriesTab
+            accountId={character.account_id}
           />
         )}
         {activeTab === 'character' && (
