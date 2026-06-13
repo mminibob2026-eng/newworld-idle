@@ -413,6 +413,21 @@ export async function completeContract(contractId: string) {
 
   if (!char) throw new Error('Character not found')
 
+  // Daily limit check
+  const today = new Date().toISOString().slice(0, 10)
+  let completedToday = char.contracts_completed_today
+  let resetDate = char.contracts_reset_date
+
+  // Reset counter if a new day
+  if (resetDate < today) {
+    completedToday = 0
+    resetDate = today
+  }
+
+  if (completedToday >= 12) {
+    throw new Error('Daily contract limit reached (12/12). Come back tomorrow.')
+  }
+
   const { data: storageItem } = await supabase
     .from('storage')
     .select('*')
@@ -425,10 +440,12 @@ export async function completeContract(contractId: string) {
     throw new Error('Not enough resources')
   }
 
+  // Level scaling: higher-level characters get better rewards
+  const levelScale = 1 + char.level * 0.05
   const chaBonus = 1 + char.charisma * 0.02
-  const goldReward = Math.floor(contract.reward_gold * chaBonus)
+  const goldReward = Math.floor(contract.reward_gold * chaBonus * levelScale)
   const kpReward = contract.reward_knowledge > 0
-    ? Math.floor(contract.reward_knowledge * (1 + char.intelligence * 0.01))
+    ? Math.floor(contract.reward_knowledge * (1 + char.intelligence * 0.01) * levelScale)
     : 0
 
   await supabase
@@ -441,6 +458,8 @@ export async function completeContract(contractId: string) {
     .update({
       gold: char.gold + goldReward,
       knowledge: char.knowledge + kpReward,
+      contracts_completed_today: completedToday + 1,
+      contracts_reset_date: resetDate,
     })
     .eq('id', contract.character_id)
 
@@ -458,5 +477,14 @@ export async function completeContract(contractId: string) {
       details: { contract_id: contractId, item: contract.requirement_item, qty: contract.requirement_qty, gold: goldReward, kp: kpReward },
     })
 
-  return { gold: goldReward, knowledge: kpReward }
+  const remaining = 12 - (completedToday + 1)
+
+  return {
+    gold: goldReward,
+    knowledge: kpReward,
+    contractsCompletedToday: completedToday + 1,
+    contractsRemainingToday: remaining,
+    contractsMaxDaily: 12,
+    contractsResetDate: resetDate,
+  }
 }

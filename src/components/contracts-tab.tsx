@@ -21,6 +21,13 @@ export function ContractsTab({
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [generated, setGenerated] = useState(false)
+  const [dailyInfo, setDailyInfo] = useState<{
+    completed: number
+    remaining: number
+    maxDaily: number
+    resetDate: string
+  } | null>(null)
+  const [genLoading, setGenLoading] = useState(false)
 
   useEffect(() => { loadContracts() }, [])
 
@@ -35,41 +42,38 @@ export function ContractsTab({
     setContracts(data ?? [])
     setGenerated(data ? data.length > 0 : false)
     setLoading(false)
+
+    const { data: char } = await supabase
+      .from('characters')
+      .select('contracts_completed_today, contracts_reset_date')
+      .eq('id', characterId)
+      .single()
+
+    if (char) {
+      const today = new Date().toISOString().slice(0, 10)
+      const resetDate = char.contracts_reset_date
+      const completed = resetDate < today ? 0 : char.contracts_completed_today
+      setDailyInfo({
+        completed,
+        remaining: 12 - completed,
+        maxDaily: 12,
+        resetDate: resetDate < today ? today : resetDate,
+      })
+    }
   }
 
   const generateContracts = async () => {
     playClick()
-    const supabase = createClient()
-    const { data: templates } = await supabase
-      .from('content_contracts')
-      .select('*')
-
-    if (!templates || templates.length === 0) {
-      notify('No contracts available')
-      return
-    }
-
-    const shuffled = templates.sort(() => Math.random() - 0.5).slice(0, 3)
-    const now = new Date()
-    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-
-    const newContracts = shuffled.map(t => {
-      const qty = Math.floor(Math.random() * (t.max_qty - t.min_qty + 1)) + t.min_qty
-      return {
-        character_id: characterId,
-        contract_type: t.contract_type,
-        requirement_item: t.requirement_item,
-        requirement_qty: qty,
-        reward_gold: qty * t.gold_reward_per_unit,
-        reward_knowledge: t.knowledge_reward,
-        faction: t.faction,
-        expires_at: expiresAt.toISOString(),
-      }
+    setGenLoading(true)
+    const res = await fetch('/api/game/generate-contracts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId }),
     })
-
-    const { error } = await (supabase as any).from('contracts').insert(newContracts)
-    if (error) {
-      notify(`Error: ${error.message}`)
+    const data = await res.json()
+    setGenLoading(false)
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
       return
     }
     notify('New contracts generated!')
@@ -119,31 +123,77 @@ export function ContractsTab({
     return item?.content_items?.name || itemId.replace(/_/g, ' ')
   }
 
+  const today = new Date()
+  const resetDate = dailyInfo?.resetDate ? new Date(dailyInfo.resetDate + 'T23:59:59') : new Date()
+  const msUntilReset = resetDate.getTime() - today.getTime() + 86400000
+  const hoursToReset = Math.floor(msUntilReset / 3600000)
+  const minsToReset = Math.floor((msUntilReset % 3600000) / 60000)
+
   return (
     <div>
       <div className="panel-header">CONTRACTS</div>
       <p style={{ color: '#888', fontSize: '10px', marginBottom: '8px' }}>
-        Complete contracts for gold and knowledge. Generate 3 new contracts per day.
+        Complete contracts for gold and knowledge. Max 12 per day.
       </p>
 
-      {!generated && (
-        <button onClick={generateContracts} className="btn-gold" style={{ width: '100%', marginBottom: '12px' }}>
-          GENERATE CONTRACTS
-        </button>
-      )}
-
-      {contracts.filter(c => !c.completed).length === 0 && generated && (
-        <div style={{ color: '#555', fontSize: '11px', textAlign: 'center', padding: '20px' }}>
-          All contracts completed! Come back tomorrow for new ones.
+      {/* Daily progress bar */}
+      {dailyInfo && (
+        <div style={{ marginBottom: '12px', padding: '8px', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '2px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+            <span style={{ color: '#888' }}>Daily Contracts</span>
+            <span style={{ color: dailyInfo.remaining > 0 ? '#0ff' : '#f44' }}>
+              {dailyInfo.completed}/{dailyInfo.maxDaily}
+            </span>
+          </div>
+          <div className="progress-bar">
+            <div className="progress-fill gold" style={{ width: `${(dailyInfo.completed / dailyInfo.maxDaily) * 100}%` }} />
+          </div>
+          {dailyInfo.remaining === 0 ? (
+            <div style={{ fontSize: '10px', color: '#f44', marginTop: '4px', textAlign: 'center' }}>
+              Limit reached — resets in {hoursToReset}h {minsToReset}m
+            </div>
+          ) : (
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px', textAlign: 'center' }}>
+              {dailyInfo.remaining} remaining today
+            </div>
+          )}
         </div>
       )}
 
+      {/* Generate button */}
+      {!generated && dailyInfo && dailyInfo.remaining > 0 && (
+        <button
+          onClick={generateContracts}
+          disabled={genLoading}
+          className="btn-gold"
+          style={{ width: '100%', marginBottom: '12px' }}
+        >
+          {genLoading ? 'GENERATING...' : 'GENERATE CONTRACTS'}
+        </button>
+      )}
+
+      {/* All done today */}
+      {dailyInfo && dailyInfo.remaining === 0 && contracts.filter(c => !c.completed).length === 0 && (
+        <div style={{ color: '#f44', fontSize: '11px', textAlign: 'center', padding: '20px' }}>
+          Daily limit reached ({dailyInfo.maxDaily}/{dailyInfo.maxDaily}). Come back in {hoursToReset}h {minsToReset}m!
+        </div>
+      )}
+
+      {/* All contracts completed but still have daily limit remaining */}
+      {contracts.filter(c => !c.completed).length === 0 && generated && dailyInfo && dailyInfo.remaining > 0 && (
+        <div style={{ color: '#555', fontSize: '11px', textAlign: 'center', padding: '20px' }}>
+          All contracts completed! Generate new ones to keep going ({dailyInfo.remaining} left today).
+        </div>
+      )}
+
+      {/* No contracts generated yet */}
       {!generated && contracts.length === 0 && (
         <div style={{ color: '#555', fontSize: '11px', textAlign: 'center', padding: '20px' }}>
           Generate contracts to start working.
         </div>
       )}
 
+      {/* Active contracts grid */}
       <div className="feature-grid">
         {contracts.filter(c => !c.completed).map(contract => {
           const storageItem = storage.find((s: any) => s.item_id === contract.requirement_item)
@@ -161,6 +211,9 @@ export function ContractsTab({
               <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
                 <span style={{ color: '#ff0' }}>{contract.reward_gold} Gold</span>
                 {contract.reward_knowledge > 0 && <span style={{ color: '#f0f' }}> | {contract.reward_knowledge} KP</span>}
+              </div>
+              <div style={{ fontSize: '9px', color: '#555', marginTop: '2px' }}>
+                Faction: {contract.faction.replace(/_/g, ' ')}
               </div>
               <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
                 <button

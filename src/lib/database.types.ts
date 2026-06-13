@@ -83,6 +83,8 @@ export type Database = {
           account_id: string
           attribute_points: number
           charisma: number
+          contracts_completed_today: number
+          contracts_reset_date: string
           created_at: string
           dexterity: number
           endurance: number
@@ -102,6 +104,8 @@ export type Database = {
           account_id: string
           attribute_points?: number
           charisma?: number
+          contracts_completed_today?: number
+          contracts_reset_date?: string
           created_at?: string
           dexterity?: number
           endurance?: number
@@ -121,6 +125,8 @@ export type Database = {
           account_id?: string
           attribute_points?: number
           charisma?: number
+          contracts_completed_today?: number
+          contracts_reset_date?: string
           created_at?: string
           dexterity?: number
           endurance?: number
@@ -600,6 +606,7 @@ export type Database = {
       }
       professions: {
         Row: {
+          category: string
           character_id: string
           created_at: string
           finish_at: string | null
@@ -611,6 +618,7 @@ export type Database = {
           xp: number
         }
         Insert: {
+          category?: string
           character_id: string
           created_at?: string
           finish_at?: string | null
@@ -622,6 +630,7 @@ export type Database = {
           xp?: number
         }
         Update: {
+          category?: string
           character_id?: string
           created_at?: string
           finish_at?: string | null
