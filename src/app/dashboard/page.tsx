@@ -84,13 +84,27 @@ export default function Dashboard() {
 
   const deleteCharacter = async (id: string) => {
     const supabase = createClient()
-    // Delete all related data first
+
+    // Check if this is the last character
+    const isLastCharacter = characters.length <= 1
+
+    // Delete character-level data
     await (supabase as any).from('professions').delete().eq('character_id', id)
     await (supabase as any).from('exploration').delete().eq('character_id', id)
     await (supabase as any).from('contracts').delete().eq('character_id', id)
     await (supabase as any).from('character_inventory').delete().eq('character_id', id)
+    await (supabase as any).from('research').delete().eq('character_id', id)
     await (supabase as any).from('game_logs').delete().eq('character_id', id)
     await (supabase as any).from('characters').delete().eq('id', id)
+
+    // If last character, also clear account-level data
+    if (isLastCharacter) {
+      await (supabase as any).from('storage').delete().eq('account_id', user!.id)
+      await (supabase as any).from('player_discoveries').delete().eq('account_id', user!.id)
+      await (supabase as any).from('player_achievements').delete().eq('account_id', user!.id)
+      await (supabase as any).from('achievement_counters').delete().eq('account_id', user!.id)
+    }
+
     setDeleteConfirm(null)
     loadCharacters()
   }
@@ -216,7 +230,13 @@ export default function Dashboard() {
             </div>
             <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
               This will permanently delete this character and all associated progress.
-              <span style={{ color: '#f44' }}> This cannot be undone.</span>
+              {deleteConfirm && characters.length <= 1 && (
+                <><br /><br /><span style={{ color: '#f44' }}>This is your last character — all account data (storage, discoveries, achievements) will also be erased.</span></>
+              )}
+              {deleteConfirm && characters.length > 1 && (
+                <><br /><br /><span style={{ color: '#ff0' }}>Shared storage and account-level achievements will be preserved.</span></>
+              )}
+              <br /><span style={{ color: '#f44' }}>This cannot be undone.</span>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-danger" style={{ flex: 1 }} onClick={() => deleteCharacter(deleteConfirm)}>
