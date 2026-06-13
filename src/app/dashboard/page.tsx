@@ -18,6 +18,7 @@ export default function Dashboard() {
   const [fatalError, setFatalError] = useState('')
   const [bobCoins, setBobCoins] = useState(0)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string>('')
 
   useEffect(() => {
     if (!user && !loading) router.push('/')
@@ -115,7 +116,18 @@ export default function Dashboard() {
       await (supabase as any).from('achievement_counters').delete().eq('account_id', user!.id)
     }
 
+    // Remove tutorial completion for this character
+    try {
+      const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
+      const charId = id
+      const updated = completedChars.filter((completedId: string) => completedId !== charId)
+      localStorage.setItem('nw-tutorial-chars', JSON.stringify(updated))
+    } catch {
+      // Ignore localStorage errors
+    }
+
     setDeleteConfirm(null)
+    setDeleteConfirmName('')
     loadCharacters()
   }
 
@@ -179,7 +191,11 @@ export default function Dashboard() {
               <button
                 className="btn-danger"
                 style={{ marginTop: '8px' }}
-                onClick={e => { e.stopPropagation(); setDeleteConfirm(char.id) }}
+                onClick={e => {
+                  e.stopPropagation()
+                  setDeleteConfirm(char.id)
+                  setDeleteConfirmName(char.name)
+                }}
               >
                 DELETE
               </button>
@@ -227,32 +243,47 @@ export default function Dashboard() {
       {deleteConfirm && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+          background: 'rgba(0,0,0,0.85)', zIndex: 9999,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <div style={{
-            background: 'var(--bg-tertiary)', border: '1px solid var(--red)',
-            padding: '20px', maxWidth: '320px', width: '90%',
-            boxShadow: '0 0 30px rgba(255,0,0,0.2)',
+            background: 'var(--bg-tertiary)', border: '2px solid var(--red)',
+            padding: '24px', maxWidth: '360px', width: '90%',
+            boxShadow: '0 0 40px rgba(255,0,0,0.3)',
           }}>
-            <div style={{ color: '#f44', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
-              ⚠️ Delete Character?
+            <div style={{ color: '#f44', fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', textAlign: 'center' }}>
+              ⚠️ DELETE CHARACTER
             </div>
-            <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
-              This will permanently delete this character and all associated progress.
-              {deleteConfirm && characters.length <= 1 && (
-                <><br /><br /><span style={{ color: '#f44' }}>This is your last character — all account data (storage, discoveries, achievements) will also be erased.</span></>
+            <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold', textAlign: 'center', marginBottom: '12px' }}>
+              {deleteConfirmName}
+            </div>
+            <div style={{ color: '#ccc', fontSize: '12px', marginBottom: '16px', lineHeight: '1.6' }}>
+              This will permanently delete <strong style={{ color: '#fff' }}>{deleteConfirmName}</strong> and all their progress:
+              <ul style={{ margin: '8px 0', paddingLeft: '20px', color: '#888' }}>
+                <li>All professions and levels</li>
+                <li>Active and queued activities</li>
+                <li>Character inventory</li>
+                <li>Contracts and game logs</li>
+              </ul>
+              {characters.length <= 1 && (
+                <div style={{ color: '#f44', marginTop: '8px', padding: '8px', background: 'rgba(255,0,0,0.1)', borderRadius: '2px' }}>
+                  <strong>WARNING:</strong> This is your last character. All account data (shared storage, discoveries, achievements) will also be permanently erased.
+                </div>
               )}
-              {deleteConfirm && characters.length > 1 && (
-                <><br /><br /><span style={{ color: '#ff0' }}>Shared storage and account-level achievements will be preserved.</span></>
+              {characters.length > 1 && (
+                <div style={{ color: '#ff0', marginTop: '8px', padding: '8px', background: 'rgba(255,255,0,0.05)', borderRadius: '2px' }}>
+                  <strong>NOTE:</strong> Shared storage and account-level achievements will be preserved for your other characters.
+                </div>
               )}
-              <br /><span style={{ color: '#f44' }}>This cannot be undone.</span>
+              <div style={{ color: '#f44', marginTop: '12px', textAlign: 'center', fontWeight: 'bold' }}>
+                This action cannot be undone.
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-danger" style={{ flex: 1 }} onClick={() => deleteCharacter(deleteConfirm)}>
                 YES, DELETE
               </button>
-              <button style={{ flex: 1 }} onClick={() => setDeleteConfirm(null)}>
+              <button style={{ flex: 1 }} onClick={() => { setDeleteConfirm(null); setDeleteConfirmName('') }}>
                 CANCEL
               </button>
             </div>

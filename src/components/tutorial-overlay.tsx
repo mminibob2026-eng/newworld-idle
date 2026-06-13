@@ -31,18 +31,18 @@ const TUTORIAL_STEPS = [
   },
 ]
 
-export function TutorialOverlay({ onComplete, userId }: { onComplete: () => void; userId?: string }) {
+export function TutorialOverlay({ onComplete, userId, characterId }: { onComplete: () => void; userId?: string; characterId?: string }) {
   const [step, setStep] = useState(0)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    if (!userId) return
-    // Check if tutorial is done for this specific account
-    const accountId = localStorage.getItem('nw-tutorial-account')
-    if (accountId !== userId) {
+    if (!characterId) return
+    // Check if tutorial is done for this specific character
+    const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
+    if (!completedChars.includes(characterId)) {
       setVisible(true)
     }
-  }, [userId])
+  }, [characterId])
 
   if (!visible) return null
 
@@ -64,8 +64,12 @@ export function TutorialOverlay({ onComplete, userId }: { onComplete: () => void
   }
 
   const finish = () => {
-    if (userId) {
-      localStorage.setItem('nw-tutorial-account', userId)
+    if (characterId) {
+      const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
+      if (!completedChars.includes(characterId)) {
+        completedChars.push(characterId)
+        localStorage.setItem('nw-tutorial-chars', JSON.stringify(completedChars))
+      }
     }
     setVisible(false)
     onComplete()
