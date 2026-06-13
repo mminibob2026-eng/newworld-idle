@@ -37,14 +37,14 @@ export async function POST(request: NextRequest) {
 
     // Claim rewards
     const { data: account } = await (supabase as any)
-      .from('accounts')
+      .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single()
 
     if (account) {
       await (supabase as any)
-        .from('accounts')
+        .from('profiles')
         .update({
           bob_coins: (account.bob_coins || 0) + ach.reward_bob_coins,
         })

@@ -25,7 +25,7 @@ CREATE TABLE content_achievements (
 
 CREATE TABLE player_achievements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  account_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   achievement_id TEXT NOT NULL REFERENCES content_achievements(id) ON DELETE CASCADE,
   progress INTEGER NOT NULL DEFAULT 0,
   completed_at TIMESTAMP,
@@ -35,7 +35,7 @@ CREATE TABLE player_achievements (
 
 CREATE TABLE achievement_counters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  account_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   counter_key TEXT NOT NULL,
   value INTEGER NOT NULL DEFAULT 0,
   UNIQUE(account_id, counter_key)
