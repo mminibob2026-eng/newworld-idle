@@ -22,7 +22,7 @@ function weightedRoll(weights: { item: string; weight: number }[]): string | nul
 }
 
 function rarityQuality(attrs: { luck: number; intelligence: number }): number {
-  return (attrs.luck * 0.02 + attrs.intelligence * 0.01) / 3
+  return (attrs.luck * 0.01 + attrs.intelligence * 0.005) / 3
 }
 
 export async function processOfflineProgress(characterId: string) {
@@ -37,6 +37,10 @@ export async function processOfflineProgress(characterId: string) {
   if (!char) return { professions: [], explorations: [], error: 'Character not found' }
 
   const results: any[] = []
+
+  const offlineMult = 1 + char.endurance * 0.02
+  const strYield = 1 + char.strength * 0.02
+  const dexSpeed = Math.max(0.1, 1 - char.dexterity * 0.01)
 
   const { data: activeProfessions } = await supabase
     .from('professions')
@@ -58,18 +62,14 @@ export async function processOfflineProgress(characterId: string) {
     const elapsedSeconds = Math.floor(
       (Date.now() - new Date(prof.started_at!).getTime()) / 1000
     )
-    const baseTime = profData.base_time_seconds
-
-    const dexBonus = 1 + char.dexterity * 0.02
-    const adjustedTime = Math.floor(baseTime / dexBonus)
+    const adjustedTime = Math.floor(profData.base_time_seconds * dexSpeed)
     let actions = Math.floor(elapsedSeconds / adjustedTime)
 
     const maxActions = Math.floor((24 * 3600) / adjustedTime)
     if (actions > maxActions) actions = maxActions
     if (actions <= 0) continue
 
-    const strBonus = 1 + char.strength * 0.03
-    const xpGained = Math.floor(actions * profData.base_xp_per_action * strBonus)
+    const xpGained = Math.floor(actions * profData.base_xp_per_action * offlineMult)
 
     const { data: rewards } = await supabase
       .from('content_profession_rewards')
@@ -94,8 +94,9 @@ export async function processOfflineProgress(characterId: string) {
       const rewardDef = rewards.find((r: any) => r.item_id === rolled)
       if (!rewardDef) continue
 
-      const qty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
-      items[rolled] = (items[rolled] || 0) + qty
+      const baseQty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
+      const finalQty = Math.max(1, Math.floor(baseQty * strYield * offlineMult))
+      items[rolled] = (items[rolled] || 0) + finalQty
     }
 
     for (const [itemId, qty] of Object.entries(items)) {
@@ -146,9 +147,8 @@ export async function processOfflineProgress(characterId: string) {
       .maybeSingle()
 
     if (queuedProf) {
-      const endBonus = 1 + char.endurance * 0.05
-      const queueDur = Math.floor(30 * endBonus)
-      const maxQueueDur = Math.floor(480 * endBonus)
+      const queueDur = Math.floor(30 * dexSpeed)
+      const maxQueueDur = Math.floor(480 * dexSpeed)
       const finalQueueDur = Math.min(queueDur, maxQueueDur)
       const queueNow = new Date()
       const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
@@ -192,7 +192,7 @@ export async function processOfflineProgress(characterId: string) {
     if (!region) continue
 
     const intBonus = 1 + char.intelligence * 0.02
-    const luckBonus = 1 + char.luck * 0.03
+    const lckMult = 1 + char.luck * 0.01
 
     const rollCount = Math.floor(3 * intBonus)
 
@@ -206,7 +206,7 @@ export async function processOfflineProgress(characterId: string) {
       const totalWeight = discoveries.reduce((sum, d: any) => sum + d.weight, 0)
       if (totalWeight > 0) {
         for (let i = 0; i < rollCount; i++) {
-          const hitChance = clamp(0.4 * luckBonus, 0.1, 0.9)
+          const hitChance = clamp(0.4 * lckMult, 0.1, 0.9)
           if (Math.random() > hitChance) continue
 
           let roll = Math.floor(Math.random() * totalWeight)
@@ -221,7 +221,7 @@ export async function processOfflineProgress(characterId: string) {
       }
     }
 
-    const value = found.reduce((sum: number, d: any) => sum + (d.base_value || 0), 0)
+    const value = found.reduce((sum: number, d: any) => sum + (d.base_value || 0), 0) * offlineMult
 
     await supabase
       .from('exploration')
@@ -324,16 +324,16 @@ export async function claimProfessionRewards(characterId: string, professionId: 
 
   const elapsedSeconds = Math.floor((now.getTime() - new Date(prof.started_at!).getTime()) / 1000)
 
-  const dexBonus = 1 + char.dexterity * 0.02
-  const adjustedTime = Math.floor(profData.base_time_seconds / dexBonus)
+  const dexSpeed = Math.max(0.1, 1 - char.dexterity * 0.01)
+  const adjustedTime = Math.floor(profData.base_time_seconds * dexSpeed)
 
   let actions = Math.floor(elapsedSeconds / adjustedTime)
   const maxActions = Math.floor((24 * 3600) / adjustedTime)
   if (actions > maxActions) actions = maxActions
   if (actions <= 0) throw new Error('No time elapsed')
 
-  const strBonus = 1 + char.strength * 0.03
-  const xpGained = Math.floor(actions * profData.base_xp_per_action * strBonus)
+  const strYield = 1 + char.strength * 0.02
+  const xpGained = Math.floor(actions * profData.base_xp_per_action)
 
   const profXpNeeded = XP_FOR_LEVEL(prof.level)
   const newProfXp = prof.xp + xpGained
@@ -363,13 +363,14 @@ export async function claimProfessionRewards(characterId: string, professionId: 
     const rewardDef = rewards.find((r: any) => r.item_id === rolled)
     if (!rewardDef) continue
 
-    const qty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
+    const baseQty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
+    const finalQty = Math.max(1, Math.floor(baseQty * strYield))
     if (items[rolled]) {
-      items[rolled].qty += qty
+      items[rolled].qty += finalQty
     } else {
       items[rolled] = {
         name: rewardDef.content_items?.name || rolled,
-        qty,
+        qty: finalQty,
         rarity: rewardDef.content_items?.rarity || 'common',
       }
     }
@@ -419,9 +420,8 @@ export async function claimProfessionRewards(characterId: string, professionId: 
       .maybeSingle()
 
     if (queued) {
-      const endBonus = 1 + char.endurance * 0.05
-      const queueDur = Math.floor(30 * endBonus)
-      const maxQueueDur = Math.floor(480 * endBonus)
+      const queueDur = Math.floor(30 * dexSpeed)
+      const maxQueueDur = Math.floor(480 * dexSpeed)
       const finalQueueDur = Math.min(queueDur, maxQueueDur)
       const queueNow = new Date()
       const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
@@ -511,7 +511,7 @@ export async function completeContract(contractId: string) {
   const chaBonus = 1 + char.charisma * 0.02
   const goldReward = Math.floor(contract.reward_gold * chaBonus * levelScale)
   const kpReward = contract.reward_knowledge > 0
-    ? Math.floor(contract.reward_knowledge * (1 + char.intelligence * 0.01) * levelScale)
+    ? Math.floor(contract.reward_knowledge * (1 + char.intelligence * 0.02) * levelScale)
     : 0
 
   await supabase

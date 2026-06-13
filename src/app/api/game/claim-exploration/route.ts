@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const char = exp.characters
     const intBonus = 1 + char.intelligence * 0.02
-    const luckBonus = 1 + char.luck * 0.03
+    const lckMult = 1 + char.luck * 0.01
     const rollCount = Math.floor(3 * intBonus)
 
     const { data: discoveries } = await supabase
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       const totalWeight = discoveries.reduce((sum, d: any) => sum + d.weight, 0)
       if (totalWeight > 0) {
         for (let i = 0; i < rollCount; i++) {
-          const hitChance = clamp(0.4 * luckBonus, 0.1, 0.9)
+          const hitChance = clamp(0.4 * lckMult, 0.1, 0.9)
           if (Math.random() > hitChance) continue
 
           let roll = Math.floor(Math.random() * totalWeight)
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
 
     let autoStarted: any = null
     if (queuedExp) {
+      const dexSpeed = Math.max(0.5, 1 - char.dexterity * 0.005)
       const { data: queuedRegion } = await supabase
         .from('content_regions')
         .select('exploration_base_time')
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (queuedRegion) {
-        const dur = Math.floor(queuedRegion.exploration_base_time * (1 - char.endurance * 0.01))
+        const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
         const finalDur = Math.max(dur, 5)
         const now = new Date()
         const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)

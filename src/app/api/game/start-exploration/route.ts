@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id, endurance')
+      .select('account_id, dexterity')
       .eq('id', characterId)
       .single()
 
@@ -75,7 +75,8 @@ export async function POST(request: NextRequest) {
 
     if (!region) return NextResponse.json({ error: 'Region not found' }, { status: 404 })
 
-    const dur = Math.floor(region.exploration_base_time * (1 - char.endurance * 0.01))
+    const dexSpeed = Math.max(0.5, 1 - char.dexterity * 0.005)
+    const dur = Math.floor(region.exploration_base_time * dexSpeed)
     const finalDur = Math.max(dur, 5)
 
     const now = new Date()

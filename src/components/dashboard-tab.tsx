@@ -15,13 +15,13 @@ const TIPS = [
   'You can have 1 active + 1 queued activity per category',
   'Complete contracts for gold and knowledge points',
   'Exploration can discover rare and valuable items',
-  'Higher Luck increases your chance of rare discoveries',
+  'Higher Luck increases your chance of discoveries',
   'Start both a profession and exploration at the same time',
   'Check your discoveries in the Collection tab',
   'Attributes affect your gameplay — spend them wisely',
   'Come back later — offline progress is calculated automatically',
   'Contracts refresh daily with up to 12 completions',
-  'Higher Endurance extends your activity duration',
+  'STR boosts item yield, DEX speeds up all activities',
 ]
 
 const PROF_EMOJIS: Record<string, string> = {
@@ -92,12 +92,12 @@ export function DashboardTab({
   }
 
   const attrDefs = [
-    { key: 'strength', label: 'STR', desc: 'Gathering power' },
-    { key: 'dexterity', label: 'DEX', desc: 'Crafting speed' },
-    { key: 'intelligence', label: 'INT', desc: 'Knowledge gain' },
-    { key: 'endurance', label: 'END', desc: 'Activity duration' },
-    { key: 'luck', label: 'LCK', desc: 'Rare finds' },
-    { key: 'charisma', label: 'CHA', desc: 'Contract rewards' },
+    { key: 'strength', label: 'STR', desc: '+2% Gathering Yield/point', effect: '+2% item quantity per action' },
+    { key: 'dexterity', label: 'DEX', desc: '+1% Action Speed/point', effect: '-1% action time, +1% exploration speed' },
+    { key: 'intelligence', label: 'INT', desc: '+2% Knowledge Point Gain/point', effect: '+2% KP gain, more discovery rolls' },
+    { key: 'endurance', label: 'END', desc: '+2% Offline Reward Efficiency/point', effect: '+2% rewards when offline' },
+    { key: 'luck', label: 'LCK', desc: '+1% Discovery Chance/point', effect: '+1% discovery hit rate' },
+    { key: 'charisma', label: 'CHA', desc: '+2% Contract Reward Value/point', effect: '+2% gold from contracts' },
   ] as const
 
   return (
@@ -134,6 +134,21 @@ export function DashboardTab({
           <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>
             XP: {character.xp.toLocaleString()} / {xpForNext.toLocaleString()}
           </div>
+        </div>
+      </div>
+
+      {/* Active Bonuses */}
+      <div className="card" style={{ marginBottom: '10px', cursor: 'default' }}>
+        <div style={{ color: '#0ff', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
+          ACTIVE BONUSES
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+          {attrDefs.map(a => (
+            <div key={a.key} style={{ fontSize: '9px', display: 'flex', justifyContent: 'space-between', padding: '2px 4px', background: 'rgba(0,255,255,0.03)' }}>
+              <span style={{ color: '#0ff' }}>{a.label}</span>
+              <span style={{ color: '#888' }}>{a.effect}</span>
+            </div>
+          ))}
         </div>
       </div>
 

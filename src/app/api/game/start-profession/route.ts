@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id, endurance')
+      .select('account_id')
       .eq('id', characterId)
       .single()
 
@@ -92,9 +92,8 @@ export async function POST(request: NextRequest) {
     }
 
     // No active in category → start normally
-    const endBonus = 1 + char.endurance * 0.05
-    const dur = Math.floor((durationMinutes || 30) * endBonus)
-    const maxDur = Math.floor(480 * endBonus)
+    const dur = Math.floor(durationMinutes || 30)
+    const maxDur = 480
     const finalDur = Math.min(dur, maxDur)
 
     const now = new Date()
