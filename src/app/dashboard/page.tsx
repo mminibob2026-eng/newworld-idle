@@ -18,27 +18,24 @@ export default function Dashboard() {
   const [fatalError, setFatalError] = useState('')
 
   useEffect(() => {
-    try {
-      if (!user && !loading) router.push('/')
-      if (user) loadCharacters()
-    } catch (e: any) {
-      setFatalError(e.message || String(e))
+    if (!user && !loading) router.push('/')
+    if (user) {
+      loadCharacters().catch(e => {
+        setFatalError(e?.message || String(e))
+        setLoadingChars(false)
+      })
     }
   }, [user, loading, router])
 
   const loadCharacters = async () => {
-    try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('characters')
-        .select('*')
-        .eq('account_id', user!.id)
-        .order('created_at', { ascending: true })
-      if (error) throw error
-      setCharacters(data ?? [])
-    } catch (e: any) {
-      setFatalError(`Failed to load characters: ${e.message}`)
-    }
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('account_id', user!.id)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    setCharacters(data ?? [])
     setLoadingChars(false)
   }
 
