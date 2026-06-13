@@ -137,21 +137,6 @@ export function DashboardTab({
         </div>
       </div>
 
-      {/* Active Bonuses */}
-      <div className="card" style={{ marginBottom: '10px', cursor: 'default' }}>
-        <div style={{ color: '#0ff', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
-          ACTIVE BONUSES
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-          {attrDefs.map(a => (
-            <div key={a.key} style={{ fontSize: '9px', display: 'flex', justifyContent: 'space-between', padding: '2px 4px', background: 'rgba(0,255,255,0.03)' }}>
-              <span style={{ color: '#0ff' }}>{a.label}</span>
-              <span style={{ color: '#888' }}>{a.effect}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Current Activities */}
       <div className="panel" style={{ marginBottom: '10px', padding: '10px' }}>
         <div style={{ color: '#0ff', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>
@@ -263,26 +248,27 @@ export function DashboardTab({
       </div>
 
       {/* Attributes */}
-      {character.attribute_points > 0 && (
-        <div style={{ marginTop: '10px' }}>
-          <div className="panel-header">ATTRIBUTES</div>
-          <div style={{ color: '#888', fontSize: '10px', marginBottom: '8px' }}>
-            Points available: <span style={{ color: '#0ff', fontWeight: 'bold' }}>{character.attribute_points}</span>
-          </div>
-          <div className="feature-grid">
-            {attrDefs.map(attr => (
-              <div key={attr.key} className="card" style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{attr.label}</span>
-                  <span style={{ color: '#fff', fontSize: '14px' }}>{(character as any)[attr.key]}</span>
-                </div>
-                <div style={{ color: '#555', fontSize: '9px', marginTop: '4px' }}>{attr.desc}</div>
-                <button style={{ marginTop: '6px', width: '100%' }} onClick={() => assignPoint(attr.key)}>+1</button>
-              </div>
-            ))}
-          </div>
+      <div style={{ marginTop: '10px' }}>
+        <div className="panel-header">ATTRIBUTES</div>
+        <div style={{ color: '#888', fontSize: '10px', marginBottom: '8px' }}>
+          Points available: <span style={{ color: '#0ff', fontWeight: 'bold' }}>{character.attribute_points}</span>
         </div>
-      )}
+        <div className="feature-grid">
+          {attrDefs.map(attr => (
+            <div key={attr.key} className="card" style={{ cursor: character.attribute_points > 0 ? 'pointer' : 'default' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{attr.label}</span>
+                <span style={{ color: '#fff', fontSize: '14px' }}>{(character as any)[attr.key]}</span>
+              </div>
+              <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{attr.desc}</div>
+              <div style={{ color: '#666', fontSize: '8px', marginTop: '1px' }}>{attr.effect}</div>
+              {character.attribute_points > 0 && (
+                <button style={{ marginTop: '6px', width: '100%' }} onClick={() => assignPoint(attr.key)}>+1</button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Stats Row */}
       <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
