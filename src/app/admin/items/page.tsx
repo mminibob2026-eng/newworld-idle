@@ -3,31 +3,19 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 
-type Item = any
-type Region = any
-type Discovery = any
-
-interface ImageState {
-  [itemId: string]: {
-    uploading: boolean
-    error?: string
-    success?: string
-  }
-}
+type ContentItem = any
 
 export default function AdminItemsPage() {
-  const [items, setItems] = useState<Item[]>([])
-  const [regions, setRegions] = useState<Region[]>([])
-  const [discoveries, setDiscoveries] = useState<Discovery[]>([])
-  const [imageState, setImageState] = useState<ImageState>({})
-  const [activeTab, setActiveTab] = useState<string>('items')
+  const [items, setItems] = useState<ContentItem[]>([])
+  const [regions, setRegions] = useState<ContentItem[]>([])
+  const [discoveries, setDiscoveries] = useState<ContentItem[]>([])
+  const [imageState, setImageState] = useState<Record<string, { uploading?: boolean; error?: string; success?: string }>>({})
+  const [activeTab, setActiveTab] = useState('items')
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
 
-  useEffect(() => {
-    loadAll()
-  }, [])
+  useEffect(() => { loadAll() }, [])
 
   const loadAll = async () => {
     const [itemsRes, regionsRes, discoveriesRes] = await Promise.all([
@@ -41,57 +29,51 @@ export default function AdminItemsPage() {
     setLoading(false)
   }
 
-  const handleUpload = async (itemId: string, file: File) => {
-    setImageState(prev => ({ ...prev, [itemId]: { uploading: true } }))
+  const handleUpload = async (contentType: string, id: string, file: File) => {
+    const key = `${contentType}:${id}`
+    setImageState(prev => ({ ...prev, [key]: { uploading: true } }))
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('itemId', itemId)
+    formData.append('contentType', contentType)
+    formData.append('id', id)
 
     try {
-      const res = await fetch('/api/admin/upload-item-image', {
+      const res = await fetch('/api/admin/upload-image', {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
       if (data.success) {
-        setImageState(prev => ({
-          ...prev,
-          [itemId]: { uploading: false, success: data.iconPath },
-        }))
+        setImageState(prev => ({ ...prev, [key]: { uploading: false, success: data.iconPath } }))
         loadAll()
       } else {
-        setImageState(prev => ({
-          ...prev,
-          [itemId]: { uploading: false, error: data.error },
-        }))
+        setImageState(prev => ({ ...prev, [key]: { uploading: false, error: data.error } }))
       }
     } catch (e: any) {
-      setImageState(prev => ({
-        ...prev,
-        [itemId]: { uploading: false, error: e.message },
-      }))
+      setImageState(prev => ({ ...prev, [key]: { uploading: false, error: e.message } }))
     }
   }
 
   if (loading) return <div style={{ padding: '20px', color: '#888' }}>Loading...</div>
 
-  const itemsNeedingImages = items.filter(it => !it.icon_path)
-  const itemsWithImages = items.filter(it => it.icon_path)
+  const itemsNoImg = items.filter(it => !it.icon_path)
+  const regionsNoImg = regions.filter(r => !r.icon_path)
+  const discoveriesNoImg = discoveries.filter(d => !d.icon_path)
+  const totalNoImg = itemsNoImg.length + regionsNoImg.length + discoveriesNoImg.length
 
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', color: '#ccc' }}>
       <h1 style={{ color: '#0ff', fontSize: '24px', marginBottom: '4px' }}>Admin — Content Manager</h1>
       <p style={{ color: '#555', fontSize: '10px', marginBottom: '20px' }}>
-        Dev-only tools for managing game content
+        Dev-only tools for managing game content. Upload 128x128 PNG images for each asset.
       </p>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {[
           { id: 'items', label: `Items (${items.length})` },
-          { id: 'needs-images', label: `Upload Images (${itemsNeedingImages.length})` },
           { id: 'regions', label: `Regions (${regions.length})` },
           { id: 'discoveries', label: `Discoveries (${discoveries.length})` },
+          { id: 'needs-images', label: `📷 Needs Images (${totalNoImg})` },
         ].map(tab => (
           <button
             key={tab.id}
@@ -107,105 +89,86 @@ export default function AdminItemsPage() {
         ))}
       </div>
 
-      {/* Tab: Items needing images */}
+      {/* === Needs Images Tab === */}
       {activeTab === 'needs-images' && (
         <div>
-          <div className="panel-header">ITEMS NEEDING IMAGES ({itemsNeedingImages.length})</div>
-          <p style={{ color: '#555', fontSize: '10px', marginBottom: '10px' }}>
-            These items have no icon_path set. Upload 128x128 PNG images for each.
-          </p>
+          <div className="panel-header">NEEDS IMAGES ({totalNoImg})</div>
+          {itemsNoImg.length > 0 && (
+            <>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Items ({itemsNoImg.length})</h3>
+              <div className="feature-grid">
+                {itemsNoImg.map(item => (
+                  <ImageUploader key={`i:${item.id}`} item={item} contentType="item"
+                    state={imageState[`item:${item.id}`]}
+                    onUpload={(f) => handleUpload('item', item.id, f)} />
+                ))}
+              </div>
+            </>
+          )}
+          {regionsNoImg.length > 0 && (
+            <>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Regions ({regionsNoImg.length})</h3>
+              <div className="feature-grid">
+                {regionsNoImg.map(r => (
+                  <ImageUploader key={`r:${r.id}`} item={r} contentType="region"
+                    state={imageState[`region:${r.id}`]}
+                    onUpload={(f) => handleUpload('region', r.id, f)} />
+                ))}
+              </div>
+            </>
+          )}
+          {discoveriesNoImg.length > 0 && (
+            <>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Discoveries ({discoveriesNoImg.length})</h3>
+              <div className="feature-grid">
+                {discoveriesNoImg.map(d => (
+                  <ImageUploader key={`d:${d.id}`} item={d} contentType="discovery"
+                    state={imageState[`discovery:${d.id}`]}
+                    onUpload={(f) => handleUpload('discovery', d.id, f)} />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* === Items Tab === */}
+      {activeTab === 'items' && (
+        <div>
+          <div className="panel-header">ALL ITEMS ({items.length})</div>
           <div className="feature-grid">
-            {itemsNeedingImages.map(item => (
-              <ItemImageUploader
-                key={item.id}
-                item={item}
-                state={imageState[item.id]}
-                onUpload={(file) => handleUpload(item.id, file)}
-              />
+            {items.map(item => (
+              <ImageUploader key={item.id} item={item} contentType="item"
+                state={imageState[`item:${item.id}`]}
+                onUpload={(f) => handleUpload('item', item.id, f)} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Tab: Items with images */}
-      {activeTab === 'items' && (
-        <div>
-          <div className="panel-header">ALL ITEMS ({items.length})</div>
-          {['gathering', 'production', 'special', 'token', 'consumable'].map(cat => {
-            const catItems = items.filter(it => it.category === cat)
-            if (catItems.length === 0) return null
-            return (
-              <div key={cat} style={{ marginBottom: '16px' }}>
-                <h3 style={{ color: '#0ff', fontSize: '14px', marginBottom: '8px', textTransform: 'capitalize' }}>
-                  {cat} ({catItems.length})
-                </h3>
-                <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ color: '#555' }}>
-                      <th style={{ textAlign: 'left', padding: '4px', borderBottom: '1px solid var(--border)' }}>ID</th>
-                      <th style={{ textAlign: 'left', padding: '4px', borderBottom: '1px solid var(--border)' }}>Name</th>
-                      <th style={{ textAlign: 'left', padding: '4px', borderBottom: '1px solid var(--border)' }}>Rarity</th>
-                      <th style={{ textAlign: 'left', padding: '4px', borderBottom: '1px solid var(--border)' }}>Icon</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {catItems.map(item => (
-                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '4px', color: '#888', fontFamily: 'monospace' }}>{item.id}</td>
-                        <td style={{ padding: '4px' }}>{item.name}</td>
-                        <td style={{ padding: '4px', color: '#555' }}>{item.rarity}</td>
-                        <td style={{ padding: '4px' }}>
-                          {item.icon_path ? (
-                            <span style={{ color: '#0f0' }}>
-                              ✓ {item.icon_path}
-                            </span>
-                          ) : (
-                            <span style={{ color: '#f44' }}>Missing</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Regions tab */}
+      {/* === Regions Tab === */}
       {activeTab === 'regions' && (
         <div>
           <div className="panel-header">REGIONS ({regions.length})</div>
-          {regions.map(r => (
-            <div key={r.id} style={{
-              padding: '10px', marginBottom: '8px',
-              border: '1px solid var(--border)', borderRadius: '2px',
-            }}>
-              <div style={{ fontWeight: 'bold', color: '#0ff' }}>{r.name}</div>
-              <div style={{ fontSize: '10px', color: '#888' }}>{r.description}</div>
-              <div style={{ fontSize: '10px', color: '#555' }}>
-                ID: {r.id} | Level: {r.level_required || 1} | Time: {r.exploration_base_time}s
-              </div>
-            </div>
-          ))}
+          <div className="feature-grid">
+            {regions.map(r => (
+              <ImageUploader key={r.id} item={r} contentType="region"
+                state={imageState[`region:${r.id}`]}
+                onUpload={(f) => handleUpload('region', r.id, f)} />
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Discoveries tab */}
+      {/* === Discoveries Tab === */}
       {activeTab === 'discoveries' && (
         <div>
           <div className="panel-header">DISCOVERIES ({discoveries.length})</div>
           <div className="feature-grid">
             {discoveries.map(d => (
-              <div key={d.id} style={{
-                padding: '10px', border: '1px solid var(--border)', borderRadius: '2px',
-              }}>
-                <div style={{ fontWeight: 'bold', color: '#0ff' }}>{d.name}</div>
-                <div style={{ fontSize: '10px', color: '#555' }}>{d.id}</div>
-                <div style={{ fontSize: '10px', color: '#888' }}>{d.description}</div>
-                <div style={{ fontSize: '10px', color: '#555' }}>Rarity: {d.rarity} | Value: {d.base_value}</div>
-              </div>
+              <ImageUploader key={d.id} item={d} contentType="discovery"
+                state={imageState[`discovery:${d.id}`]}
+                onUpload={(f) => handleUpload('discovery', d.id, f)} />
             ))}
           </div>
         </div>
@@ -214,33 +177,43 @@ export default function AdminItemsPage() {
   )
 }
 
-function ItemImageUploader({ item, state, onUpload }: {
+function ImageUploader({ item, contentType, state, onUpload }: {
   item: any
+  contentType: string
   state?: { uploading?: boolean; error?: string; success?: string }
   onUpload: (file: File) => void
 }) {
+  const hasIcon = !!item.icon_path
   return (
     <div style={{
       padding: '10px', border: '1px solid var(--border)',
       borderRadius: '2px', background: 'var(--bg-secondary)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-        <div style={{
-          width: '40px', height: '40px', background: 'var(--bg-tertiary)',
-          border: '1px solid var(--border)', borderRadius: '2px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '18px', color: '#555',
-        }}>
-          ?
-        </div>
+        {hasIcon ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.icon_path} alt={item.name}
+            style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '2px' }} />
+        ) : (
+          <div style={{
+            width: '40px', height: '40px', background: 'var(--bg-tertiary)',
+            border: '1px solid var(--border)', borderRadius: '2px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '18px', color: '#555',
+          }}>?</div>
+        )}
         <div>
           <div style={{ color: '#0ff', fontWeight: 'bold', fontSize: '12px' }}>{item.name}</div>
           <div style={{ color: '#555', fontSize: '9px' }}>{item.id}</div>
-          <div style={{ color: '#555', fontSize: '9px', textTransform: 'capitalize' }}>
-            {item.category} — {item.rarity}
-          </div>
+          {item.category && <div style={{ color: '#555', fontSize: '9px' }}>{item.category}</div>}
+          {item.rarity && <div style={{ color: '#555', fontSize: '9px' }}>{item.rarity}</div>}
         </div>
       </div>
+      {hasIcon && (
+        <div style={{ fontSize: '9px', color: '#0f0', marginBottom: '4px' }}>
+          ✓ {item.icon_path}
+        </div>
+      )}
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp"
@@ -248,10 +221,7 @@ function ItemImageUploader({ item, state, onUpload }: {
           const file = e.target.files?.[0]
           if (file) onUpload(file)
         }}
-        style={{
-          width: '100%', fontSize: '10px', color: '#888',
-          marginBottom: '4px',
-        }}
+        style={{ width: '100%', fontSize: '10px', color: '#888' }}
         disabled={state?.uploading}
       />
       {state?.uploading && <div style={{ color: '#888', fontSize: '10px' }}>Uploading...</div>}
