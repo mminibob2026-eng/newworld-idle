@@ -128,6 +128,14 @@ export async function processOfflineProgress(characterId: string) {
     .lt('finish_at', new Date().toISOString())
 
   for (const prof of activeProfessions || []) {
+    // Optimistic lock: only process if still active
+    const { data: freshProf } = await supabase
+      .from('professions')
+      .select('is_active')
+      .eq('id', prof.id)
+      .single()
+    if (!freshProf || !freshProf.is_active) continue
+
     const { data: profData } = await supabase
       .from('content_professions')
       .select('*')
@@ -185,10 +193,10 @@ export async function processOfflineProgress(characterId: string) {
         .eq('item_id', itemId)
         .single()
 
-      if (existing) {
+if (existing) {
         await supabase
           .from('storage')
-          .update({ quantity: existing.quantity + qty })
+          .update({ quantity: existing.quantity + (qty as number) })
           .eq('id', existing.id)
       } else {
         await supabase
@@ -199,13 +207,19 @@ export async function processOfflineProgress(characterId: string) {
 
     const profXpNeeded = XP_FOR_LEVEL(prof.level)
     const newProfXp = prof.xp + xpGained
-    const profLevelUps = Math.floor(newProfXp / profXpNeeded)
+    let newProfLevel = prof.level
+    let profRemainingXp = newProfXp
+    while (profRemainingXp >= XP_FOR_LEVEL(newProfLevel)) {
+      profRemainingXp -= XP_FOR_LEVEL(newProfLevel)
+      newProfLevel++
+    }
+    const profLevelUps = newProfLevel - prof.level
 
     await supabase
       .from('professions')
       .update({
-        level: prof.level + profLevelUps,
-        xp: newProfXp % profXpNeeded,
+        level: newProfLevel,
+        xp: profRemainingXp,
         is_active: false,
         started_at: null,
         finish_at: null,
@@ -238,11 +252,9 @@ export async function processOfflineProgress(characterId: string) {
       .maybeSingle()
 
     if (queuedProf) {
-      const queueDur = Math.floor(30 * dexSpeed)
-      const maxQueueDur = Math.floor(480 * dexSpeed)
-      const finalQueueDur = Math.min(queueDur, maxQueueDur)
+      const queueDur = 30
       const queueNow = new Date()
-      const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
+      const queueFinishAt = new Date(queueNow.getTime() + queueDur * 60 * 1000)
 
       await supabase
         .from('professions')
@@ -285,10 +297,19 @@ export async function processOfflineProgress(characterId: string) {
     .select('*')
     .eq('character_id', characterId)
     .eq('completed', false)
+    .eq('is_queued', false)
     .not('finish_at', 'is', null)
     .lt('finish_at', new Date().toISOString())
 
   for (const exp of activeExplorations || []) {
+    // Optimistic lock: only process if still incomplete
+    const { data: freshExp } = await supabase
+      .from('exploration')
+      .select('completed')
+      .eq('id', exp.id)
+      .single()
+    if (!freshExp || freshExp.completed) continue
+
     const { data: region } = await supabase
       .from('content_regions')
       .select('*')
@@ -367,9 +388,10 @@ export async function processOfflineProgress(characterId: string) {
     }
 
     if (value > 0) {
+      char.gold += value
       await supabase
         .from('characters')
-        .update({ gold: char.gold + value })
+        .update({ gold: char.gold })
         .eq('id', characterId)
 
       await supabase
@@ -451,6 +473,10 @@ async function addCharacterXp(supabase: any, char: any, amount: number) {
     })
     .eq('id', char.id)
 
+  if (newLevel > char.level) {
+    try { await supabase.rpc('increment_counter', { p_account_id: char.account_id, p_key: 'reach_level', p_amount: newLevel - char.level }) } catch {}
+  }
+
   return { leveledUp: newLevel > char.level, newLevel }
 }
 
@@ -500,8 +526,13 @@ export async function claimProfessionRewards(characterId: string, professionId: 
 
   const profXpNeeded = XP_FOR_LEVEL(prof.level)
   const newProfXp = prof.xp + xpGained
-  const profLevelUps = Math.floor(newProfXp / profXpNeeded)
-  const profRemainingXp = newProfXp % profXpNeeded
+  let newProfLevel = prof.level
+  let profRemainingXp = newProfXp
+  while (profRemainingXp >= XP_FOR_LEVEL(newProfLevel)) {
+    profRemainingXp -= XP_FOR_LEVEL(newProfLevel)
+    newProfLevel++
+  }
+  const profLevelUps = newProfLevel - prof.level
 
   const { data: rewards } = await supabase
     .from('content_profession_rewards')
@@ -560,16 +591,16 @@ export async function claimProfessionRewards(characterId: string, professionId: 
     }
   }
 
-  await supabase
-    .from('professions')
-    .update({
-      level: prof.level + profLevelUps,
-      xp: profRemainingXp,
-      is_active: false,
-      started_at: null,
-      finish_at: null,
-    })
-    .eq('id', prof.id)
+await supabase
+      .from('professions')
+      .update({
+        level: newProfLevel,
+        xp: profRemainingXp,
+        is_active: false,
+        started_at: null,
+        finish_at: null,
+      })
+      .eq('id', prof.id)
 
   // Check for queued profession in same category and auto-start it
   const queuedCategory = profData?.category
@@ -583,11 +614,9 @@ export async function claimProfessionRewards(characterId: string, professionId: 
       .maybeSingle()
 
     if (queued) {
-      const queueDur = Math.floor(30 * dexSpeed)
-      const maxQueueDur = Math.floor(480 * dexSpeed)
-      const finalQueueDur = Math.min(queueDur, maxQueueDur)
+      const queueDur = 30
       const queueNow = new Date()
-      const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
+      const queueFinishAt = new Date(queueNow.getTime() + queueDur * 60 * 1000)
 
       await supabase
         .from('professions')

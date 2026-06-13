@@ -37,6 +37,17 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error
 
+    // Track achievement counter
+    try {
+      await (supabase as any).rpc('increment_counter', {
+        p_account_id: user.id,
+        p_key: 'spend_attribute',
+        p_amount: 1,
+      })
+    } catch {
+      // Counter not critical, ignore
+    }
+
     return NextResponse.json({ success: true, attribute })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })

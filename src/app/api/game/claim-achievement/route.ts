@@ -51,6 +51,26 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
     }
 
+    // Award gold and knowledge to the user's primary character
+    if (ach.reward_gold > 0 || ach.reward_knowledge > 0) {
+      const { data: chars } = await supabase
+        .from('characters')
+        .select('id, gold, knowledge')
+        .eq('account_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      if (chars && chars.length > 0) {
+        const char = chars[0]
+        const updates: any = {}
+        if (ach.reward_gold > 0) updates.gold = (char.gold || 0) + ach.reward_gold
+        if (ach.reward_knowledge > 0) updates.knowledge = (char.knowledge || 0) + ach.reward_knowledge
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('characters').update(updates).eq('id', char.id)
+        }
+      }
+    }
+
     // Mark as claimed
     await (supabase as any)
       .from('player_achievements')

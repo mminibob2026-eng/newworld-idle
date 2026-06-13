@@ -40,11 +40,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (char.level < 10) {
-      return NextResponse.json({ error: 'Reach level 10 to unlock specializations', status: 400 })
+      return NextResponse.json({ error: 'Reach level 10 to unlock specializations' }, { status: 400 })
     }
 
     if ((char as any).specialization) {
-      return NextResponse.json({ error: 'Character already has a specialization', status: 400 })
+      return NextResponse.json({ error: 'Character already has a specialization' }, { status: 400 })
     }
 
     await (supabase as any)

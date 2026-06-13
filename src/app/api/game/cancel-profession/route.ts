@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id')
+      .select('account_id, dexterity')
       .eq('id', characterId)
       .single()
 
@@ -34,6 +34,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active or queued session to cancel' }, { status: 400 })
     }
 
+    const wasActive = prof.is_active
+    const profCategory = prof.category
+
     await supabase
       .from('professions')
       .update({
@@ -43,6 +46,31 @@ export async function POST(request: NextRequest) {
         finish_at: null,
       })
       .eq('id', prof.id)
+
+    // If we canceled an active profession, auto-start the queued one in same category
+    if (wasActive && profCategory) {
+      const { data: queued } = await supabase
+        .from('professions')
+        .select('*')
+        .eq('character_id', characterId)
+        .eq('category', profCategory)
+        .eq('is_queued', true)
+        .maybeSingle()
+
+      if (queued) {
+        const now = new Date()
+        const finishAt = new Date(now.getTime() + 30 * 60 * 1000)
+        await supabase
+          .from('professions')
+          .update({
+            is_queued: false,
+            is_active: true,
+            started_at: now.toISOString(),
+            finish_at: finishAt.toISOString(),
+          })
+          .eq('id', queued.id)
+      }
+    }
 
     await supabase.from('game_logs').insert({
       account_id: char.account_id,

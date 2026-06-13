@@ -137,9 +137,10 @@ export function ExplorationTab({
                 </div>
                 <button
                   style={{ fontSize: '10px', marginTop: '6px', width: '100%' }}
+                  disabled={new Date(exp.finish_at!) > new Date()}
                   onClick={() => claimExploration(exp.id)}
                 >
-                  CLAIM
+                  {new Date(exp.finish_at!) > new Date() ? 'IN PROGRESS...' : 'CLAIM'}
                 </button>
               </div>
             )

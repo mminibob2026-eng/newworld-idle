@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { RARITY_COLORS } from '@/lib/game-data'
 import { ProfessionTab } from '@/components/profession-tab'
@@ -207,10 +207,12 @@ function WorldPage() {
     loadCharacter(character.id)
   }
 
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const notify = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
+    if (notificationTimerRef.current) clearTimeout(notificationTimerRef.current)
     setNotification(msg)
     setNotificationType(type)
-    setTimeout(() => setNotification(''), 4000)
+    notificationTimerRef.current = setTimeout(() => setNotification(''), 4000)
   }, [])
 
   const refresh = useCallback(() => {

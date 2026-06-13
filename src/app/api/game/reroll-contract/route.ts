@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
     const { data: contract } = await (supabase as any)
       .from('contracts')
-      .select('*, characters!inner(account_id, gold)')
+      .select('*, characters!inner(account_id, gold, level)')
       .eq('id', contractId)
       .single()
 
@@ -32,17 +32,21 @@ export async function POST(request: NextRequest) {
     const { data: templates } = await supabase
       .from('content_contracts')
       .select('*')
+      .lte('min_level', contract.characters.level)
 
     if (!templates || templates.length === 0) {
       return NextResponse.json({ error: 'No contract templates' }, { status: 500 })
     }
 
     const template = templates[Math.floor(Math.random() * templates.length)]
+    const levelScale = 1 + contract.characters.level * 0.1
 
-    const qty = template.min_qty + Math.floor(Math.random() * (template.max_qty - template.min_qty + 1))
-    const goldReward = qty * template.gold_reward_per_unit
+    const scaledMin = Math.floor(template.min_qty * levelScale)
+    const scaledMax = Math.ceil(template.max_qty * levelScale)
+    const qty = Math.floor(Math.random() * (scaledMax - scaledMin + 1)) + scaledMin
+    const goldReward = Math.floor(qty * template.gold_reward_per_unit * levelScale)
     const kpReward = template.knowledge_reward > 0
-      ? template.knowledge_reward + Math.floor(Math.random() * template.knowledge_reward)
+      ? Math.floor((template.knowledge_reward + Math.floor(Math.random() * template.knowledge_reward)) * levelScale)
       : 0
 
     const now = new Date()

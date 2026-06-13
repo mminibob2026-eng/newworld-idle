@@ -77,6 +77,16 @@ export default function Dashboard() {
       return
     }
 
+    try {
+      await (supabase as any).rpc('increment_counter', {
+        p_account_id: user!.id,
+        p_key: 'create_character',
+        p_amount: 1,
+      })
+    } catch {
+      // Counter not critical
+    }
+
     setNewName('')
     setShowCreate(false)
     loadCharacters()
