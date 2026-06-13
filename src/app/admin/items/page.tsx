@@ -35,12 +35,15 @@ export default function AdminItemsPage() {
   const handleUpload = async (contentType: string, id: string, file: File) => {
     const key = `${contentType}:${id}`
     setImageState(prev => ({ ...prev, [key]: { uploading: true } }))
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('contentType', contentType)
-    formData.append('id', id)
 
     try {
+      // Process image: resize to 256x256, auto-remove solid backgrounds
+      const processed = await processImage(file, 256)
+      const formData = new FormData()
+      formData.append('file', new File([processed], file.name.replace(/\.[^.]+$/, '.png'), { type: 'image/png' }))
+      formData.append('contentType', contentType)
+      formData.append('id', id)
+
       const res = await fetch('/api/admin/upload-image', {
         method: 'POST',
         body: formData,
@@ -278,4 +281,77 @@ function ImageUploader({ item, contentType, state, onUpload }: {
       {state?.error && <div style={{ color: '#f44', fontSize: '10px' }}>Error: {state.error}</div>}
     </div>
   )
+}
+
+async function processImage(file: File, targetSize: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = targetSize
+      canvas.height = targetSize
+      const ctx = canvas.getContext('2d')!
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+
+      // Draw image resized to fill the square (cover fit)
+      const scale = Math.max(targetSize / img.width, targetSize / img.height)
+      const sw = img.width * scale
+      const sh = img.height * scale
+      const sx = (targetSize - sw) / 2
+      const sy = (targetSize - sh) / 2
+      ctx.drawImage(img, sx, sy, sw, sh)
+
+      // Detect solid background by checking corner uniformity
+      const imageData = ctx.getImageData(0, 0, targetSize, targetSize)
+      const data = imageData.data
+
+      // Sample edge pixels (corners + midpoints)
+      const edgeSamples = [
+        { x: 0, y: 0 }, { x: Math.floor(targetSize / 2), y: 0 }, { x: targetSize - 1, y: 0 },
+        { x: 0, y: Math.floor(targetSize / 2) }, { x: targetSize - 1, y: Math.floor(targetSize / 2) },
+        { x: 0, y: targetSize - 1 }, { x: Math.floor(targetSize / 2), y: targetSize - 1 }, { x: targetSize - 1, y: targetSize - 1 },
+      ]
+
+      let rSum = 0, gSum = 0, bSum = 0
+      for (const s of edgeSamples) {
+        const idx = (s.y * targetSize + s.x) * 4
+        rSum += data[idx]
+        gSum += data[idx + 1]
+        bSum += data[idx + 2]
+      }
+      const bgR = rSum / edgeSamples.length
+      const bgG = gSum / edgeSamples.length
+      const bgB = bSum / edgeSamples.length
+
+      // Measure variance - low variance = solid color background
+      let totalVariance = 0
+      for (const s of edgeSamples) {
+        const idx = (s.y * targetSize + s.x) * 4
+        totalVariance += Math.abs(data[idx] - bgR) + Math.abs(data[idx + 1] - bgG) + Math.abs(data[idx + 2] - bgB)
+      }
+      totalVariance /= edgeSamples.length
+
+      const THRESHOLD = 50
+      // Only remove background if edges are mostly uniform (variance < 20)
+      if (totalVariance < 20) {
+        for (let i = 0; i < data.length; i += 4) {
+          const dr = Math.abs(data[i] - bgR)
+          const dg = Math.abs(data[i + 1] - bgG)
+          const db = Math.abs(data[i + 2] - bgB)
+          if (dr < THRESHOLD && dg < THRESHOLD && db < THRESHOLD) {
+            data[i + 3] = 0
+          }
+        }
+        ctx.putImageData(imageData, 0, 0)
+      }
+
+      canvas.toBlob(b => {
+        if (b) resolve(b)
+        else reject(new Error('Failed to create image blob'))
+      }, 'image/png')
+    }
+    img.onerror = reject
+    img.src = URL.createObjectURL(file)
+  })
 }
