@@ -26,22 +26,36 @@ function rarityQuality(attrs: { luck: number; intelligence: number }): number {
 }
 
 async function incrementCounter(supabase: any, accountId: string, key: string, amount: number = 1) {
-  const { data: existing } = await supabase
-    .from('achievement_counters')
-    .select('id, value')
-    .eq('account_id', accountId)
-    .eq('counter_key', key)
-    .single()
-
-  if (existing) {
-    await supabase
-      .from('achievement_counters')
-      .update({ value: existing.value + amount })
-      .eq('id', existing.id)
-  } else {
+  // Use atomic increment function to avoid race conditions
+  try {
+    await (supabase as any)
+      .rpc('increment_counter', {
+        p_account_id: accountId,
+        p_key: key,
+        p_amount: amount,
+      })
+  } catch {
+    // Fallback to simple insert if function doesn't exist yet
     await supabase
       .from('achievement_counters')
       .insert({ account_id: accountId, counter_key: key, value: amount })
+      .catch(() => {
+        // If insert fails (duplicate), try to update
+        supabase
+          .from('achievement_counters')
+          .select('id, value')
+          .eq('account_id', accountId)
+          .eq('counter_key', key)
+          .single()
+          .then(({ data }: any) => {
+            if (data) {
+              supabase
+                .from('achievement_counters')
+                .update({ value: data.value + amount })
+                .eq('id', data.id)
+            }
+          })
+      })
   }
 }
 
@@ -198,7 +212,21 @@ export async function processOfflineProgress(characterId: string) {
       })
       .eq('id', prof.id)
 
-    await addCharacterXp(supabase, char, xpGained)
+    const charResult = await addCharacterXp(supabase, char, xpGained)
+    if (charResult.leveledUp) {
+      // Refresh char object for next iteration
+      const { data: updatedChar } = await supabase
+        .from('characters')
+        .select('*')
+        .eq('id', characterId)
+        .single()
+      if (updatedChar) {
+        char.level = updatedChar.level
+        char.xp = updatedChar.xp
+        char.attribute_points = updatedChar.attribute_points
+        char.gold = updatedChar.gold
+      }
+    }
 
     // Auto-start queued profession in same category if exists
     const { data: queuedProf } = await supabase
@@ -247,6 +275,7 @@ export async function processOfflineProgress(characterId: string) {
       actions,
       xpGained,
       levelUps: profLevelUps,
+      fromLevel: prof.level,
       items,
     })
   }
@@ -305,7 +334,15 @@ export async function processOfflineProgress(characterId: string) {
       .update({ completed: true, discoveries: found })
       .eq('id', exp.id)
 
-    for (const d of found) {
+    // Deduplicate discoveries before inserting
+    const seen = new Set<string>()
+    const uniqueFound = found.filter((d: any) => {
+      if (seen.has(d.id)) return false
+      seen.add(d.id)
+      return true
+    })
+
+    for (const d of uniqueFound) {
       await supabase
         .from('player_discoveries')
         .insert({
@@ -622,10 +659,16 @@ export async function completeContract(contractId: string) {
 
   if (!char) throw new Error('Character not found')
 
-  // Daily limit check
+  // Daily limit check - read fresh data to avoid race conditions
+  const { data: freshChar } = await supabase
+    .from('characters')
+    .select('contracts_completed_today, contracts_reset_date')
+    .eq('id', contract.character_id)
+    .single()
+  
   const today = new Date().toISOString().slice(0, 10)
-  let completedToday = char.contracts_completed_today
-  let resetDate = char.contracts_reset_date
+  let completedToday = freshChar?.contracts_completed_today ?? char.contracts_completed_today
+  let resetDate = freshChar?.contracts_reset_date ?? char.contracts_reset_date
 
   // Reset counter if a new day
   if (resetDate < today) {

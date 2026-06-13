@@ -36,14 +36,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active or queued exploration to cancel' }, { status: 400 })
     }
 
+    // Delete the exploration row instead of marking as completed
     await supabase
       .from('exploration')
-      .update({
-        completed: true,
-        is_queued: false,
-        started_at: undefined as any,
-        finish_at: undefined as any,
-      })
+      .delete()
       .eq('id', exp.id)
 
     await supabase.from('game_logs').insert({

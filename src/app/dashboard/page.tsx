@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [newName, setNewName] = useState('')
   const [error, setError] = useState('')
   const [fatalError, setFatalError] = useState('')
+  const [bobCoins, setBobCoins] = useState(0)
 
   useEffect(() => {
     if (!user && !loading) router.push('/')
@@ -24,8 +25,19 @@ export default function Dashboard() {
         setFatalError(e?.message || String(e))
         setLoadingChars(false)
       })
+      loadProfile()
     }
   }, [user, loading, router])
+
+  const loadProfile = async () => {
+    const supabase = createClient()
+    const { data } = await (supabase as any)
+      .from('profiles')
+      .select('bob_coins')
+      .eq('id', user!.id)
+      .single()
+    if (data) setBobCoins(data.bob_coins || 0)
+  }
 
   const loadCharacters = async () => {
     const supabase = createClient()
@@ -69,6 +81,12 @@ export default function Dashboard() {
 
   const deleteCharacter = async (id: string) => {
     const supabase = createClient()
+    // Delete all related data first
+    await (supabase as any).from('professions').delete().eq('character_id', id)
+    await (supabase as any).from('exploration').delete().eq('character_id', id)
+    await (supabase as any).from('contracts').delete().eq('character_id', id)
+    await (supabase as any).from('character_inventory').delete().eq('character_id', id)
+    await (supabase as any).from('game_logs').delete().eq('character_id', id)
     await (supabase as any).from('characters').delete().eq('id', id)
     loadCharacters()
   }
@@ -171,7 +189,7 @@ export default function Dashboard() {
       <div className="panel" style={{ marginBottom: '16px' }}>
         <div className="panel-header">ACCOUNT</div>
         <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: '#888' }}>
-          <span>Bob Coins: <span style={{ color: '#ff0' }}>0</span></span>
+          <span>Bob Coins: <span style={{ color: '#ff0' }}>{bobCoins}</span></span>
           <span>Bob Pass: <span style={{ color: '#888' }}>Free</span></span>
         </div>
       </div>

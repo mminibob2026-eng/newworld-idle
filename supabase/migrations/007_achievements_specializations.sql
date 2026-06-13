@@ -42,6 +42,25 @@ CREATE TABLE achievement_counters (
 );
 
 -- ============================================
+-- ATOMIC INCREMENT FUNCTION
+-- ============================================
+
+CREATE OR REPLACE FUNCTION increment_counter(p_account_id UUID, p_key TEXT, p_amount INTEGER)
+RETURNS INTEGER AS $$
+DECLARE
+  v_new_value INTEGER;
+BEGIN
+  INSERT INTO achievement_counters (account_id, counter_key, value)
+  VALUES (p_account_id, p_key, p_amount)
+  ON CONFLICT (account_id, counter_key)
+  DO UPDATE SET value = achievement_counters.value + p_amount
+  RETURNING value INTO v_new_value;
+  
+  RETURN v_new_value;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
 -- SPECIALIZATION SYSTEM
 -- ============================================
 

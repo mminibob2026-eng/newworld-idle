@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id')
+      .select('account_id, level')
       .eq('id', characterId)
       .single()
 
@@ -24,11 +24,32 @@ export async function POST(request: NextRequest) {
 
     const { data: profData } = await supabase
       .from('content_professions')
-      .select('category, name')
+      .select('category, name, unlocks_at_level')
       .eq('id', professionId)
       .single()
 
     if (!profData) return NextResponse.json({ error: 'Profession not found' }, { status: 404 })
+
+    if (profData.unlocks_at_level > char.level) {
+      return NextResponse.json({
+        error: `${profData.name} requires level ${profData.unlocks_at_level}`,
+      }, { status: 403 })
+    }
+
+    // Check if this specific profession is already active
+    const { data: activeThisProfession } = await supabase
+      .from('professions')
+      .select('id')
+      .eq('character_id', characterId)
+      .eq('profession', professionId)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (activeThisProfession) {
+      return NextResponse.json({
+        error: `${profData.name} is already active. Claim it first or wait for it to complete.`,
+      }, { status: 409 })
+    }
 
     // Check if there's already an active profession in this category
     const { data: activeInCategory } = await supabase

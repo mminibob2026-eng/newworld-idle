@@ -87,9 +87,10 @@ function WorldPage() {
           if (p.levelUps > 0) {
             allLevelUps.push({
               profession: p.name || 'Unknown',
-              from: Math.max(1, (p.level || 1) - p.levelUps),
-              to: p.level || 1,
+              from: p.fromLevel || 1,
+              to: (p.fromLevel || 1) + p.levelUps,
             })
+            hasLevelUp = true
           }
         }
 
@@ -183,7 +184,7 @@ function WorldPage() {
     const hasRare = items.some((i: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity))
     const levelUps: { profession: string; from: number; to: number }[] = []
     if (data.levelUps > 0) {
-      levelUps.push({ profession: professionName, from: Math.max(1, (data.levelUps || 1) - 1), to: data.levelUps || 1 })
+      levelUps.push({ profession: professionName, from: data.fromLevel || 1, to: (data.fromLevel || 1) + data.levelUps })
     }
 
     if (hasRare) playRare()

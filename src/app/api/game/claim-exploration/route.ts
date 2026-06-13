@@ -107,7 +107,15 @@ export async function POST(request: NextRequest) {
         .eq('id', exp.character_id)
     }
 
-    for (const d of found) {
+    // Deduplicate discoveries before inserting
+    const seen = new Set<string>()
+    const uniqueFound = found.filter((d: any) => {
+      if (seen.has(d.id)) return false
+      seen.add(d.id)
+      return true
+    })
+
+    for (const d of uniqueFound) {
       await supabase
         .from('player_discoveries')
         .insert({

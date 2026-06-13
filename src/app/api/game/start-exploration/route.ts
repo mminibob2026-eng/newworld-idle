@@ -14,12 +14,26 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id, dexterity')
+      .select('account_id, dexterity, level')
       .eq('id', characterId)
       .single()
 
     if (!char || char.account_id !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+    }
+
+    const { data: region } = await supabase
+      .from('content_regions')
+      .select('required_level, unlock_cost_gold, exploration_base_time')
+      .eq('id', regionId)
+      .single()
+
+    if (!region) return NextResponse.json({ error: 'Region not found' }, { status: 404 })
+
+    if (char.level < region.required_level) {
+      return NextResponse.json({
+        error: `Region requires level ${region.required_level}`,
+      }, { status: 403 })
     }
 
     const { data: active } = await supabase
@@ -66,14 +80,6 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ queued: true, region: regionId, message: 'Exploration queued! Will auto-start when current one finishes.' })
     }
-
-    const { data: region } = await supabase
-      .from('content_regions')
-      .select('exploration_base_time')
-      .eq('id', regionId)
-      .single()
-
-    if (!region) return NextResponse.json({ error: 'Region not found' }, { status: 404 })
 
     const dexSpeed = Math.max(0.5, 1 - char.dexterity * 0.005)
     const dur = Math.floor(region.exploration_base_time * dexSpeed)

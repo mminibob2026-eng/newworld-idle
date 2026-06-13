@@ -22,6 +22,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
+    // Check if already has 3 active non-completed contracts
+    const { data: activeContracts } = await supabase
+      .from('contracts')
+      .select('id')
+      .eq('character_id', characterId)
+      .eq('completed', false)
+      .gte('expires_at', new Date().toISOString())
+
+    if (activeContracts && activeContracts.length >= 3) {
+      return NextResponse.json({
+        error: 'Already have 3 active contracts. Complete or wait for them to expire first.',
+      }, { status: 409 })
+    }
+
     const { data: templates } = await supabase
       .from('content_contracts')
       .select('*')
