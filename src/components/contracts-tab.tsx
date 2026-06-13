@@ -28,11 +28,24 @@ export function ContractsTab({
     resetDate: string
   } | null>(null)
   const [genLoading, setGenLoading] = useState(false)
+  const [itemSources, setItemSources] = useState<Record<string, string>>({})
 
   useEffect(() => { loadContracts() }, [])
 
   const loadContracts = async () => {
     const supabase = createClient()
+
+    // Build item→profession source map
+    const { data: rewardRows } = await supabase
+      .from('content_profession_rewards')
+      .select('item_id, content_professions!inner(name)')
+    const sourceMap: Record<string, string> = {}
+    for (const row of rewardRows ?? []) {
+      if (!sourceMap[row.item_id]) {
+        sourceMap[row.item_id] = (row as any).content_professions?.name || ''
+      }
+    }
+    setItemSources(sourceMap)
     const { data } = await supabase
       .from('contracts')
       .select('*')
@@ -215,6 +228,11 @@ export function ContractsTab({
               <div style={{ fontSize: '9px', color: '#555', marginTop: '2px' }}>
                 Faction: {contract.faction.replace(/_/g, ' ')}
               </div>
+              {itemSources[contract.requirement_item] && (
+                <div style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>
+                  Source: <span style={{ color: '#0ff' }}>{itemSources[contract.requirement_item]}</span>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
                 <button
                   style={{ fontSize: '10px', flex: 1 }}

@@ -73,8 +73,8 @@ export function DashboardTab({
 
   const xpForNext = Math.floor(100 * Math.pow(character.level, 1.5))
   const xpPct = Math.min(100, ((character.xp || 0) / xpForNext) * 100)
-  const activeProf = professions.find((p: Profession) => p.is_active)
-  const queuedProf = professions.find((p: Profession) => p.is_queued)
+  const activeProfs = professions.filter((p: Profession) => p.is_active)
+  const queuedProfs = professions.filter((p: Profession) => p.is_queued)
   const activeExp = explorations.find((e: Exploration) => !e.completed && !e.is_queued && e.finish_at)
 
   const assignPoint = async (attr: string) => {
@@ -143,32 +143,33 @@ export function DashboardTab({
           CURRENT ACTIVITIES
         </div>
 
-        {activeProf ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '18px' }}>{PROF_EMOJIS[activeProf.profession] || '⏳'}</span>
+        {activeProfs.map(prof => (
+          <div key={prof.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '18px' }}>{PROF_EMOJIS[prof.profession] || '⏳'}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}>
-                  {activeProf.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  {prof.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                 </span>
-                <span style={{ color: '#888', fontSize: '10px' }}>Lv.{activeProf.level}</span>
+                <span style={{ color: '#888', fontSize: '10px' }}>Lv.{prof.level}</span>
               </div>
               <div style={{ color: '#ff0', fontSize: '11px', marginTop: '2px', fontFamily: 'monospace' }}>
-                {activeProf.finish_at ? formatRemaining(new Date(activeProf.finish_at).getTime() - now) : ''}
+                {prof.finish_at ? formatRemaining(new Date(prof.finish_at).getTime() - now) : ''}
               </div>
               <div className="progress-bar" style={{ marginTop: '4px' }}>
                 <div className="progress-fill gold" style={{
-                  width: activeProf.finish_at
-                    ? `${Math.min(100, ((now - new Date(activeProf.started_at!).getTime()) / (new Date(activeProf.finish_at!).getTime() - new Date(activeProf.started_at!).getTime())) * 100)}%`
+                  width: prof.finish_at
+                    ? `${Math.min(100, ((now - new Date(prof.started_at!).getTime()) / (new Date(prof.finish_at!).getTime() - new Date(prof.started_at!).getTime())) * 100)}%`
                     : '0%'
                 }} />
               </div>
             </div>
           </div>
-        ) : null}
+        ))}
 
+        {activeExp && (activeProfs.length > 0 ? <div style={{ borderTop: '1px solid var(--border)', marginTop: '4px' }} /> : null)}
         {activeExp ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: activeProf ? 'none' : '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0' }}>
             <span style={{ fontSize: '18px' }}>🧭</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -190,17 +191,17 @@ export function DashboardTab({
           </div>
         ) : null}
 
-        {queuedProf ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', color: '#ff0' }}>
+        {queuedProfs.map(qp => (
+          <div key={qp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', color: '#ff0', borderTop: '1px solid var(--border)', marginTop: '4px' }}>
             <span style={{ fontSize: '16px' }}>⏳</span>
             <span style={{ fontSize: '11px' }}>
-              Queued: {queuedProf.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+              Queued: {qp.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
               <span style={{ color: '#888', marginLeft: '6px' }}>(will auto-start)</span>
             </span>
           </div>
-        ) : null}
+        ))}
 
-        {!activeProf && !activeExp && !queuedProf && (
+        {activeProfs.length === 0 && !activeExp && queuedProfs.length === 0 && (
           <div style={{ textAlign: 'center', padding: '12px 0', color: '#555' }}>
             <div style={{ fontSize: '24px', marginBottom: '6px' }}>💤</div>
             <div style={{ fontSize: '11px' }}>All idle. Start an activity to progress!</div>
