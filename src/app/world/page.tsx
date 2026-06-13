@@ -99,10 +99,20 @@ function WorldPage() {
     if (char) {
       const { data: stor } = await (supabase as any)
         .from('storage')
-        .select('*, content_items(*)')
+        .select('*')
         .eq('account_id', char.account_id)
         .eq('item_type', 'item')
-      setStorage(stor ?? [])
+      let storageRows = stor ?? []
+      if (storageRows.length > 0) {
+        const itemIds = [...new Set(storageRows.map((s: any) => s.item_id))]
+        const { data: items } = await (supabase as any)
+          .from('content_items')
+          .select('*')
+          .in('id', itemIds)
+        const itemMap = Object.fromEntries((items ?? []).map((i: any) => [i.id, i]))
+        storageRows = storageRows.map((s: any) => ({ ...s, content_items: itemMap[s.item_id] || null }))
+      }
+      setStorage(storageRows)
 
       const { data: profs } = await (supabase as any)
         .from('professions')

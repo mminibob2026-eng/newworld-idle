@@ -22,6 +22,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
+    const { data: profData } = await supabase
+      .from('content_professions')
+      .select('category')
+      .eq('id', professionId)
+      .single()
+
+    if (!profData) return NextResponse.json({ error: 'Profession not found' }, { status: 404 })
+
+    const { data: activeProfs } = await supabase
+      .from('professions')
+      .select('profession')
+      .eq('character_id', characterId)
+      .eq('is_active', true)
+
+    if (activeProfs && activeProfs.length > 0) {
+      const activeIds = activeProfs.map((p: any) => p.profession)
+      const { data: cats } = await supabase
+        .from('content_professions')
+        .select('category')
+        .in('id', activeIds)
+      if (cats && cats.some((c: any) => c.category === profData.category)) {
+        return NextResponse.json({ error: `Already have an active ${profData.category} activity. Claim it first.` }, { status: 400 })
+      }
+    }
+
     const endBonus = 1 + char.endurance * 0.05
     const dur = Math.floor((durationMinutes || 30) * endBonus)
     const maxDur = Math.floor(480 * endBonus)
@@ -46,7 +71,7 @@ export async function POST(request: NextRequest) {
       account_id: char.account_id,
       character_id: characterId,
       action: 'start_profession',
-      details: { profession: professionId, duration: finalDur },
+      details: { profession: professionId, category: profData.category, duration: finalDur },
     })
 
     return NextResponse.json({ startedAt: now.toISOString(), finishAt: finishAt.toISOString(), actualDuration: finalDur })

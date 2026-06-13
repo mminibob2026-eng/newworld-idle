@@ -22,6 +22,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
+    const { data: existing } = await supabase
+      .from('exploration')
+      .select('id')
+      .eq('character_id', characterId)
+      .eq('completed', false)
+      .not('finish_at', 'is', null)
+      .maybeSingle()
+
+    if (existing) {
+      return NextResponse.json({ error: 'Already have an active exploration. Claim it first.' }, { status: 400 })
+    }
+
     const { data: region } = await supabase
       .from('content_regions')
       .select('exploration_base_time')
