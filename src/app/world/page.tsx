@@ -12,13 +12,15 @@ import { ContractsTab } from '@/components/contracts-tab'
 import { StorageView } from '@/components/storage-view'
 import { DashboardTab } from '@/components/dashboard-tab'
 import { DiscoveriesTab } from '@/components/discoveries-tab'
+import { ProfessionsView } from '@/components/professions-view'
+import { CollectionView } from '@/components/collection-view'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
 import { playReward, playLevelUp, playRare, initAudio } from '@/lib/sound'
 
 type Character = any
 type Profession = any
 
-type Tab = 'dashboard' | 'gathering' | 'production' | 'exploration' | 'contracts' | 'storage' | 'discoveries' | 'character'
+type Tab = 'home' | 'professions' | 'exploration' | 'contracts' | 'collection'
 
 export default function WorldPageWrapper() {
   return (
@@ -37,8 +39,10 @@ function WorldPage() {
   const [character, setCharacter] = useState<Character | null>(null)
   const [storage, setStorage] = useState<any[]>([])
   const [professions, setProfessions] = useState<Profession[]>([])
+  const [explorations, setExplorations] = useState<any[]>([])
+  const [discoveries, setDiscoveries] = useState<any[]>([])
   const [loadingChar, setLoadingChar] = useState(true)
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard')
+  const [activeTab, setActiveTab] = useState<Tab>('home')
   const [notification, setNotification] = useState('')
   const [notificationType, setNotificationType] = useState<'info' | 'success' | 'error'>('info')
   const { rewards, addReward } = useRewardFeed()
@@ -141,6 +145,13 @@ function WorldPage() {
       }
       setStorage(storageRows)
       setProfessions(profsRes.data ?? [])
+
+      const [expRes, discRes] = await Promise.all([
+        (supabase as any).from('exploration').select('*').eq('character_id', id).eq('completed', false).order('created_at', { ascending: false }).limit(3),
+        (supabase as any).from('player_discoveries').select('*, content_discoveries(*)').eq('account_id', char.account_id).order('discovered_at', { ascending: false }).limit(5),
+      ])
+      setExplorations(expRes.data ?? [])
+      setDiscoveries(discRes.data ?? [])
     }
     setLoadingChar(false)
   }
@@ -199,14 +210,11 @@ function WorldPage() {
   const tabContent = useMemo(() => {
     if (!character) return null
     switch (activeTab) {
-      case 'dashboard': return <DashboardTab key="dash" character={character} professions={professions} onRefresh={refresh} />
-      case 'gathering': return <ProfessionTab key="gather" category="gathering" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
-      case 'production': return <ProfessionTab key="craft" category="production" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
+      case 'home': return <DashboardTab key="home" character={character} professions={professions} explorations={explorations} discoveries={discoveries} onRefresh={refresh} notify={notify} />
+      case 'professions': return <ProfessionsView key="profs" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showProfessionReward={(d, n) => showProfessionReward(d, n)} />
       case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
       case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
-      case 'storage': return <StorageView key="storage" storage={storage} onRefresh={refresh} />
-      case 'discoveries': return <DiscoveriesTab key="discover" accountId={character.account_id} />
-      case 'character': return <CharacterTab key="char" character={character} onRefresh={refresh} notify={notify} />
+      case 'collection': return <CollectionView key="collect" accountId={character.account_id} storage={storage} onRefresh={refresh} />
       default: return null
     }
   }, [activeTab, character, professions, storage, refresh, notify])
@@ -223,14 +231,11 @@ function WorldPage() {
   const kpIcon = '⚡'
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'dashboard', label: 'HOME' },
-    { id: 'gathering', label: 'GATHER' },
-    { id: 'production', label: 'CRAFT' },
+    { id: 'home', label: 'HOME' },
+    { id: 'professions', label: 'PROFESSIONS' },
     { id: 'exploration', label: 'EXPLORE' },
     { id: 'contracts', label: 'CONTRACTS' },
-    { id: 'storage', label: 'STORAGE' },
-    { id: 'discoveries', label: 'DISCOVER' },
-    { id: 'character', label: 'CHAR' },
+    { id: 'collection', label: 'COLLECTION' },
   ]
 
   return (
@@ -311,76 +316,4 @@ function WorldPage() {
   )
 }
 
-function CharacterTab({ character, onRefresh, notify }: { character: Character; onRefresh: () => void; notify: (msg: string, type?: 'info' | 'success' | 'error') => void }) {
-  const attrs = [
-    { key: 'strength', label: 'STR', desc: 'Gathering power & carrying capacity' },
-    { key: 'dexterity', label: 'DEX', desc: 'Crafting speed & precision' },
-    { key: 'intelligence', label: 'INT', desc: 'Knowledge gain & discovery rate' },
-    { key: 'endurance', label: 'END', desc: 'Max energy & activity duration' },
-    { key: 'luck', label: 'LCK', desc: 'Rare finds & discovery quality' },
-    { key: 'charisma', label: 'CHA', desc: 'Contract rewards & trading' },
-  ] as const
-
-  const assignPoint = async (attr: string) => {
-    if (!character.attribute_points) return
-    const res = await fetch('/api/game/assign-attribute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ characterId: character.id, attribute: attr }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      notify(`Error: ${data.error}`)
-      return
-    }
-    notify(`+1 ${attr.toUpperCase()}`, 'success')
-    onRefresh()
-  }
-
-  return (
-    <div>
-      <div className="panel-header">CHARACTER</div>
-      <div style={{ marginBottom: '12px' }}>
-        <div style={{ color: '#0ff', fontSize: '16px', fontWeight: 'bold' }}>{character.name}</div>
-        <div style={{ color: '#888', fontSize: '11px' }}>Level {character.level} {character.region.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</div>
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#555' }}>
-          XP: {character.xp.toLocaleString()} / {Math.floor(100 * Math.pow(character.level, 1.5)).toLocaleString()}
-        </div>
-        <div className="progress-bar" style={{ marginTop: '4px' }}>
-          <div
-            className="progress-fill"
-            style={{ width: `${Math.min(100, (character.xp || 0) / Math.floor(100 * Math.pow(character.level, 1.5)) * 100)}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="panel-header" style={{ marginTop: '12px' }}>ATTRIBUTES</div>
-      <div style={{ color: '#888', fontSize: '10px', marginBottom: '8px' }}>
-        Points available: <span style={{ color: '#0ff' }}>{character.attribute_points}</span>
-      </div>
-      <div className="feature-grid">
-        {attrs.map(attr => (
-          <div key={attr.key} className="card" style={{ cursor: character.attribute_points > 0 ? 'pointer' : 'default' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>
-                {attr.label}
-              </span>
-              <span style={{ color: '#fff', fontSize: '14px' }}>
-                {(character as any)[attr.key]}
-              </span>
-            </div>
-            <div style={{ color: '#555', fontSize: '9px', marginTop: '4px' }}>{attr.desc}</div>
-            {character.attribute_points > 0 && (
-              <button
-                style={{ marginTop: '6px', width: '100%' }}
-                onClick={() => assignPoint(attr.key)}
-              >
-                +1
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+  // 
