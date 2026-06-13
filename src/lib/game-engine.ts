@@ -464,11 +464,18 @@ export async function learnProfession(characterId: string, professionId: string)
 
   if (existing) return existing
 
+  const { data: profData } = await supabase
+    .from('content_professions')
+    .select('category')
+    .eq('id', professionId)
+    .single()
+
   const { data, error } = await supabase
     .from('professions')
     .insert({
       character_id: characterId,
       profession: professionId,
+      category: profData?.category || 'gathering',
     })
     .select()
     .single()

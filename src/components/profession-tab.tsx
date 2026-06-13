@@ -56,15 +56,17 @@ export function ProfessionTab({
 
   const learnProfession = async (professionId: string) => {
     playClick()
+    const prof = available.find(p => p.id === professionId)
+    if (!prof) return
     const supabase = createClient()
     const { error } = await supabase
       .from('professions')
-      .insert({ character_id: characterId, profession: professionId })
+      .insert({ character_id: characterId, profession: professionId, category: prof.category })
     if (error) {
       notify(`Error: ${error.message}`)
       return
     }
-    notify(`Learned ${available.find(p => p.id === professionId)?.name}!`)
+    notify(`Learned ${prof.name}!`)
     onRefresh()
   }
 
