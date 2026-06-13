@@ -3,7 +3,7 @@
 import { Suspense } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { RARITY_COLORS } from '@/lib/game-data'
 import { ProfessionTab } from '@/components/profession-tab'
@@ -13,7 +13,7 @@ import { StorageView } from '@/components/storage-view'
 import { DashboardTab } from '@/components/dashboard-tab'
 import { DiscoveriesTab } from '@/components/discoveries-tab'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
-import { playReward, playLevelUp, playRare } from '@/lib/sound'
+import { playReward, playLevelUp, playRare, initAudio } from '@/lib/sound'
 
 type Character = any
 type Profession = any
@@ -47,6 +47,7 @@ function WorldPage() {
     if (!user && !loading) router.push('/')
     if (!charId && !loading) router.push('/dashboard')
     if (user && charId) {
+      initAudio()
       loadCharacter(charId)
       processOffline(charId)
     }
@@ -119,20 +120,16 @@ function WorldPage() {
 
   const loadCharacter = async (id: string) => {
     const supabase = createClient()
-    const { data: char } = await (supabase as any)
-      .from('characters')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const [charRes, storRes, profsRes] = await Promise.all([
+      (supabase as any).from('characters').select('*').eq('id', id).single(),
+      (supabase as any).from('storage').select('*').eq('item_type', 'item'),
+      (supabase as any).from('professions').select('*').eq('character_id', id),
+    ])
+    const char = charRes.data
     setCharacter(char)
 
     if (char) {
-      const { data: stor } = await (supabase as any)
-        .from('storage')
-        .select('*')
-        .eq('account_id', char.account_id)
-        .eq('item_type', 'item')
-      let storageRows = stor ?? []
+      let storageRows = (storRes.data ?? []) as any[]
       if (storageRows.length > 0) {
         const itemIds = [...new Set(storageRows.map((s: any) => s.item_id))]
         const { data: items } = await (supabase as any)
@@ -143,12 +140,7 @@ function WorldPage() {
         storageRows = storageRows.map((s: any) => ({ ...s, content_items: itemMap[s.item_id] || null }))
       }
       setStorage(storageRows)
-
-      const { data: profs } = await (supabase as any)
-        .from('professions')
-        .select('*')
-        .eq('character_id', char.id)
-      setProfessions(profs ?? [])
+      setProfessions(profsRes.data ?? [])
     }
     setLoadingChar(false)
   }
@@ -199,6 +191,10 @@ function WorldPage() {
     setNotificationType(type)
     setTimeout(() => setNotification(''), 4000)
   }, [])
+
+  const refresh = useCallback(() => {
+    if (character) loadCharacter(character.id)
+  }, [character?.id])
 
   if (loading || loadingChar || !character) {
     return (
@@ -294,64 +290,19 @@ function WorldPage() {
 
       {/* Tab Content */}
       <div className="panel" style={{ minHeight: '300px' }}>
-        {activeTab === 'dashboard' && (
-          <DashboardTab
-            character={character}
-            professions={professions}
-            onRefresh={() => loadCharacter(character.id)}
-          />
-        )}
-        {activeTab === 'gathering' && (
-          <ProfessionTab
-            category="gathering"
-            characterId={character.id}
-            accountId={character.account_id}
-            professions={professions}
-            onRefresh={() => loadCharacter(character.id)}
-            notify={notify}
-            showReward={(data, name) => showProfessionReward(data, name)}
-          />
-        )}
-        {activeTab === 'production' && (
-          <ProfessionTab
-            category="production"
-            characterId={character.id}
-            accountId={character.account_id}
-            professions={professions}
-            onRefresh={() => loadCharacter(character.id)}
-            notify={notify}
-            showReward={(data, name) => showProfessionReward(data, name)}
-          />
-        )}
-        {activeTab === 'exploration' && (
-          <ExplorationTab
-            characterId={character.id}
-            notify={notify}
-            showReward={(data, name) => showExplorationReward(data, name)}
-          />
-        )}
-        {activeTab === 'contracts' && (
-          <ContractsTab
-            characterId={character.id}
-            storage={storage}
-            notify={notify}
-            onRefresh={() => loadCharacter(character.id)}
-          />
-        )}
-        {activeTab === 'storage' && (
-          <StorageView
-            storage={storage}
-            onRefresh={() => loadCharacter(character.id)}
-          />
-        )}
-        {activeTab === 'discoveries' && (
-          <DiscoveriesTab
-            accountId={character.account_id}
-          />
-        )}
-        {activeTab === 'character' && (
-          <CharacterTab character={character} onRefresh={() => loadCharacter(character.id)} notify={notify} />
-        )}
+        {useMemo(() => {
+          switch (activeTab) {
+            case 'dashboard': return <DashboardTab key="dash" character={character} professions={professions} onRefresh={refresh} />
+            case 'gathering': return <ProfessionTab key="gather" category="gathering" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
+            case 'production': return <ProfessionTab key="craft" category="production" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
+            case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
+            case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
+            case 'storage': return <StorageView key="storage" storage={storage} onRefresh={refresh} />
+            case 'discoveries': return <DiscoveriesTab key="discover" accountId={character.account_id} />
+            case 'character': return <CharacterTab key="char" character={character} onRefresh={refresh} notify={notify} />
+            default: return null
+          }
+        }, [activeTab, character, professions, storage, refresh, notify])}
       </div>
     </div>
   )

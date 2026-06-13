@@ -1,5 +1,11 @@
 let audioCtx: AudioContext | null = null
 
+export function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new AudioContext()
+  }
+}
+
 function getCtx(): AudioContext {
   if (!audioCtx) audioCtx = new AudioContext()
   return audioCtx
