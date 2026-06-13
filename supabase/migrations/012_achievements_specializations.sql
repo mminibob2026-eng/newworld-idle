@@ -6,7 +6,7 @@
 -- ACHIEVEMENT SYSTEM
 -- ============================================
 
-CREATE TABLE content_achievements (
+CREATE TABLE IF NOT EXISTS content_achievements (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE content_achievements (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE player_achievements (
+CREATE TABLE IF NOT EXISTS player_achievements (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   achievement_id TEXT NOT NULL REFERENCES content_achievements(id) ON DELETE CASCADE,
@@ -33,7 +33,7 @@ CREATE TABLE player_achievements (
   UNIQUE(account_id, achievement_id)
 );
 
-CREATE TABLE achievement_counters (
+CREATE TABLE IF NOT EXISTS achievement_counters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   counter_key TEXT NOT NULL,
@@ -64,7 +64,7 @@ $$ LANGUAGE plpgsql;
 -- SPECIALIZATION SYSTEM
 -- ============================================
 
-CREATE TABLE content_specializations (
+CREATE TABLE IF NOT EXISTS content_specializations (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE content_specializations (
 );
 
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS specialization TEXT;
-ALTER TABLE characters ADD COLUMN IF NOT EXISTS specialization_level INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS specialization_level INTEGER DEFAULT 1;
 
 -- ============================================
 -- SEED ACHIEVEMENTS
@@ -121,7 +121,8 @@ INSERT INTO content_achievements (id, name, description, category, requirement_t
 ('login_7_days', 'Dedicated', 'Login for 7 consecutive days', 'social', 'login_streak', 7, 'The Loyal', '{"type":"offline_bonus","value":0.05}', 30, 0, 'uncommon', 24),
 ('login_30_days', 'Committed', 'Login for 30 consecutive days', 'social', 'login_streak', 30, 'The Devoted', '{"type":"offline_bonus","value":0.10}', 100, 0, 'legendary', 25),
 ('collect_all_wood', 'Lumber Lord', 'Collect all wood-type items', 'gathering', 'collect_category', 5, 'The Forester', '{"type":"woodcutting_xp","value":0.10}', 15, 0, 'rare', 26),
-('collect_all_mining', 'Ore Master', 'Collect all mining-type items', 'gathering', 'collect_category', 5, 'The Miner', '{"type":"mining_xp","value":0.10}', 15, 0, 'rare', 27);
+('collect_all_mining', 'Ore Master', 'Collect all mining-type items', 'gathering', 'collect_category', 5, 'The Miner', '{"type":"mining_xp","value":0.10}', 15, 0, 'rare', 27)
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- SEED SPECIALIZATIONS
@@ -168,16 +169,22 @@ INSERT INTO content_specializations (id, name, description, primary_attribute, u
   '{"type":"market_profit","value":0.05,"label":"+5% Market Profit"}',
   '{"type":"vendor_discount","value":0.10,"label":"+10% Vendor Discount"}',
   '{"type":"extra_contract","value":1,"label":"+1 Daily Contract"}',
-  '{"type":"faction_rep","value":0.10,"label":"+10% Faction Reputation"}');
+  '{"type":"faction_rep","value":0.10,"label":"+10% Faction Reputation"}')
+ON CONFLICT (id) DO NOTHING;
 
 -- ============================================
 -- RLS POLICIES
 -- ============================================
 
-ALTER TABLE content_achievements ENABLE ROW LEVEL SECURITY;
-ALTER TABLE player_achievements ENABLE ROW LEVEL SECURITY;
-ALTER TABLE achievement_counters ENABLE ROW LEVEL SECURITY;
-ALTER TABLE content_specializations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS content_achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS player_achievements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS achievement_counters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS content_specializations ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "content_read" ON content_achievements;
+DROP POLICY IF EXISTS "content_read" ON content_specializations;
+DROP POLICY IF EXISTS "player_ach_own" ON player_achievements;
+DROP POLICY IF EXISTS "counter_own" ON achievement_counters;
 
 CREATE POLICY "content_read" ON content_achievements FOR SELECT USING (true);
 CREATE POLICY "content_read" ON content_specializations FOR SELECT USING (true);
