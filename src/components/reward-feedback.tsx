@@ -14,7 +14,7 @@ interface RewardEvent {
   title: string
   timeAway?: number
   items?: RewardItem[]
-  discoveries?: { name: string; rarity: string; region?: string; lore?: string }[]
+  discoveries?: { name: string; rarity: string; region?: string; lore?: string; icon_path?: string }[]
   xp?: number
   gold?: number
   levelUps?: { profession: string; from: number; to: number }[]
@@ -142,6 +142,11 @@ export function RewardFeed({ rewards }: { rewards: RewardEvent[] }) {
               </div>
               {r.discoveries.map((d, i) => (
                 <div key={i} style={{ marginBottom: '6px' }}>
+                  {d.icon_path && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={d.icon_path} alt={d.name}
+                      style={{ width: '48px', height: '48px', objectFit: 'contain', margin: '0 auto 4px', display: 'block' }} />
+                  )}
                   <div style={{
                     color: RARITY_COLORS[d.rarity as keyof typeof RARITY_COLORS] || '#fff',
                     fontSize: '14px', fontWeight: 'bold',

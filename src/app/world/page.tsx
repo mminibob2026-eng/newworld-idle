@@ -93,7 +93,7 @@ function WorldPage() {
         for (const e of data.explorations || []) {
           const discoveries = (e.discoveries || []).map((d: any) => {
             if (['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity)) hasRare = true
-            return { name: d.name, rarity: d.rarity || 'common', region: e.region || e.name, lore: d.lore }
+            return { name: d.name, rarity: d.rarity || 'common', region: e.region || e.name, lore: d.lore, icon_path: d.icon_path }
           })
           allDiscoveries.push(...discoveries)
           totalGold += e.gold || 0
@@ -158,7 +158,7 @@ function WorldPage() {
 
   const showExplorationReward = (data: any, regionName: string) => {
     const discoveries = (data.discoveries || []).map((d: any) => ({
-      name: d.name, rarity: d.rarity || 'common', region: regionName, lore: d.lore,
+      name: d.name, rarity: d.rarity || 'common', region: regionName, lore: d.lore, icon_path: d.icon_path,
     }))
     const hasRare = discoveries.some((d: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity))
     if (hasRare) playRare()

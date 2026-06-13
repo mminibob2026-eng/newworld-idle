@@ -101,102 +101,148 @@ export default function AdminItemsPage() {
       </div>
 
       {/* === Needs Images Tab === */}
-      {activeTab === 'needs-images' && (
-        <div>
-          <div className="panel-header">NEEDS IMAGES ({totalNoImg})</div>
-          {gameItemsNoImg.length > 0 && (
-            <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Items ({gameItemsNoImg.length})</h3>
-              <div className="feature-grid">
-                {gameItemsNoImg.map(item => (
-                  <ImageUploader key={`i:${item.id}`} item={item} contentType="item"
-                    state={imageState[`item:${item.id}`]}
-                    onUpload={(f) => handleUpload('item', item.id, f)} />
-                ))}
+      {activeTab === 'needs-images' && (() => {
+        const categories = ['gathering', 'production', 'consumable', 'equipment'] as const
+        const catLabels: Record<string, string> = {
+          gathering: 'GATHERING', production: 'PRODUCTION', consumable: 'CONSUMABLE', equipment: 'EQUIPMENT',
+        }
+        const groupedNoImg = Object.fromEntries(categories.map(c => [c, gameItemsNoImg.filter(i => i.category === c)]))
+        return (
+          <div>
+            <div className="panel-header">NEEDS IMAGES ({totalNoImg})</div>
+            {categories.filter(c => groupedNoImg[c].length > 0).map(cat => (
+              <div key={cat} style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  ITEMS — {catLabels[cat]} ({groupedNoImg[cat].length})
+                </h3>
+                <div className="feature-grid">
+                  {groupedNoImg[cat].map(item => (
+                    <ImageUploader key={`i:${item.id}`} item={item} contentType="item"
+                      state={imageState[`item:${item.id}`]}
+                      onUpload={(f) => handleUpload('item', item.id, f)} />
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-          {professionsNoImg.length > 0 && (
-            <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Professions ({professionsNoImg.length})</h3>
-              <div className="feature-grid">
-                {professionsNoImg.map(p => (
-                  <ImageUploader key={`p:${p.id}`} item={p} contentType="profession"
-                    state={imageState[`profession:${p.id}`]}
-                    onUpload={(f) => handleUpload('profession', p.id, f)} />
-                ))}
+            ))}
+            {professionsNoImg.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px' }}>PROFESSIONS ({professionsNoImg.length})</h3>
+                <div className="feature-grid">
+                  {professionsNoImg.map(p => (
+                    <ImageUploader key={`p:${p.id}`} item={p} contentType="profession"
+                      state={imageState[`profession:${p.id}`]}
+                      onUpload={(f) => handleUpload('profession', p.id, f)} />
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-          {regionsNoImg.length > 0 && (
-            <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Regions ({regionsNoImg.length})</h3>
-              <div className="feature-grid">
-                {regionsNoImg.map(r => (
-                  <ImageUploader key={`r:${r.id}`} item={r} contentType="region"
-                    state={imageState[`region:${r.id}`]}
-                    onUpload={(f) => handleUpload('region', r.id, f)} />
-                ))}
+            )}
+            {regionsNoImg.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px' }}>REGIONS ({regionsNoImg.length})</h3>
+                <div className="feature-grid">
+                  {regionsNoImg.map(r => (
+                    <ImageUploader key={`r:${r.id}`} item={r} contentType="region"
+                      state={imageState[`region:${r.id}`]}
+                      onUpload={(f) => handleUpload('region', r.id, f)} />
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-          {discoveriesNoImg.length > 0 && (
-            <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Discoveries ({discoveriesNoImg.length})</h3>
-              <div className="feature-grid">
-                {discoveriesNoImg.map(d => (
-                  <ImageUploader key={`d:${d.id}`} item={d} contentType="discovery"
-                    state={imageState[`discovery:${d.id}`]}
-                    onUpload={(f) => handleUpload('discovery', d.id, f)} />
-                ))}
+            )}
+            {discoveriesNoImg.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px' }}>DISCOVERIES ({discoveriesNoImg.length})</h3>
+                <div className="feature-grid">
+                  {discoveriesNoImg.map(d => (
+                    <ImageUploader key={`d:${d.id}`} item={d} contentType="discovery"
+                      state={imageState[`discovery:${d.id}`]}
+                      onUpload={(f) => handleUpload('discovery', d.id, f)} />
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-          {discoveryItemsNoImg.length > 0 && (
-            <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Discovery Items ({discoveryItemsNoImg.length}) — same images apply to discoveries</h3>
-              <div className="feature-grid">
-                {discoveryItemsNoImg.map(item => (
-                  <ImageUploader key={`di:${item.id}`} item={item} contentType="item"
-                    state={imageState[`item:${item.id}`]}
-                    onUpload={(f) => handleUpload('item', item.id, f)} />
-                ))}
+            )}
+            {discoveryItemsNoImg.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px' }}>DISCOVERY ITEMS ({discoveryItemsNoImg.length})</h3>
+                <div className="feature-grid">
+                  {discoveryItemsNoImg.map(item => (
+                    <ImageUploader key={`di:${item.id}`} item={item} contentType="item"
+                      state={imageState[`item:${item.id}`]}
+                      onUpload={(f) => handleUpload('item', item.id, f)} />
+                  ))}
+                </div>
               </div>
-            </>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )
+      })()}
 
       {/* === Items Tab === */}
-      {activeTab === 'items' && (
-        <div>
-          <div className="panel-header">ALL ITEMS ({gameItems.length})</div>
-          <p style={{ color: '#555', fontSize: '9px', marginBottom: '8px' }}>
-            Discovery-category items ({discoveryItems.length}) are shown in the Discoveries tab instead.
-          </p>
-          <div className="feature-grid">
-            {gameItems.map(item => (
-              <ImageUploader key={item.id} item={item} contentType="item"
-                state={imageState[`item:${item.id}`]}
-                onUpload={(f) => handleUpload('item', item.id, f)} />
+      {activeTab === 'items' && (() => {
+        const categories = ['gathering', 'production', 'consumable', 'equipment'] as const
+        const catLabels: Record<string, string> = {
+          gathering: 'GATHERING', production: 'PRODUCTION', consumable: 'CONSUMABLE', equipment: 'EQUIPMENT',
+        }
+        const grouped = Object.fromEntries(categories.map(c => [c, gameItems.filter(i => i.category === c)]))
+        return (
+          <div>
+            <div className="panel-header">ALL ITEMS ({gameItems.length})</div>
+            {categories.filter(c => grouped[c].length > 0).map(cat => (
+              <div key={cat} style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {catLabels[cat]} ({grouped[cat].length})
+                </h3>
+                <div className="feature-grid">
+                  {grouped[cat].map(item => (
+                    <ImageUploader key={item.id} item={item} contentType="item"
+                      state={imageState[`item:${item.id}`]}
+                      onUpload={(f) => handleUpload('item', item.id, f)} />
+                  ))}
+                </div>
+              </div>
             ))}
+            {discoveryItems.length > 0 && (
+              <div>
+                <h3 style={{ color: '#f0f', fontSize: '11px', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  DISCOVERY ITEMS ({discoveryItems.length})
+                </h3>
+                <div className="feature-grid">
+                  {discoveryItems.map(item => (
+                    <ImageUploader key={item.id} item={item} contentType="item"
+                      state={imageState[`item:${item.id}`]}
+                      onUpload={(f) => handleUpload('item', item.id, f)} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* === Professions Tab === */}
-      {activeTab === 'professions' && (
-        <div>
-          <div className="panel-header">PROFESSIONS ({professions.length})</div>
-          <div className="feature-grid">
-            {professions.map(p => (
-              <ImageUploader key={p.id} item={p} contentType="profession"
-                state={imageState[`profession:${p.id}`]}
-                onUpload={(f) => handleUpload('profession', p.id, f)} />
+      {activeTab === 'professions' && (() => {
+        const profCats = ['gathering', 'production', 'knowledge'] as const
+        const profLabels: Record<string, string> = { gathering: 'GATHERING', production: 'PRODUCTION', knowledge: 'KNOWLEDGE' }
+        const profGrouped = Object.fromEntries(profCats.map(c => [c, professions.filter(p => p.category === c)]))
+        return (
+          <div>
+            <div className="panel-header">PROFESSIONS ({professions.length})</div>
+            {profCats.filter(c => profGrouped[c].length > 0).map(cat => (
+              <div key={cat} style={{ marginBottom: '16px' }}>
+                <h3 style={{ color: '#0ff', fontSize: '11px', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  {profLabels[cat]} ({profGrouped[cat].length})
+                </h3>
+                <div className="feature-grid">
+                  {profGrouped[cat].map(p => (
+                    <ImageUploader key={p.id} item={p} contentType="profession"
+                      state={imageState[`profession:${p.id}`]}
+                      onUpload={(f) => handleUpload('profession', p.id, f)} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* === Regions Tab === */}
       {activeTab === 'regions' && (

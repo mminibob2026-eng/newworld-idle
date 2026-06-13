@@ -172,6 +172,11 @@ export function DiscoveriesTab({ accountId }: { accountId: string }) {
                   {disc.rarity}
                 </span>
               </div>
+              {isFound && disc.icon_path && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={disc.icon_path} alt={disc.name}
+                  style={{ width: '64px', height: '64px', objectFit: 'contain', margin: '6px auto 0', display: 'block' }} />
+              )}
               {isFound && (
                 <div style={{ color: '#555', fontSize: '9px', marginTop: '4px' }}>
                   {details?.region && <span style={{ color: '#888' }}>📍 {details.region}</span>}
