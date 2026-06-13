@@ -223,7 +223,7 @@ function WorldPage() {
   ]
 
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto', padding: '10px' }}>
+    <div className="world-container" style={{ maxWidth: '700px', margin: '0 auto', padding: '8px' }}>
       <RewardFeed rewards={rewards} />
 
       {notification && (
@@ -239,63 +239,55 @@ function WorldPage() {
       )}
 
       {/* Top Bar */}
-      <div className="panel" style={{ marginBottom: '8px', padding: '8px 12px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#0ff', fontWeight: 'bold', fontSize: '14px', letterSpacing: '1px' }}>{character.name}</span>
-            <span style={{ color: '#888', fontSize: '11px' }}>Lv.{character.level}</span>
-            <span style={{ color: '#555', fontSize: '10px' }}>{character.region.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}</span>
+      <div className="panel" style={{ marginBottom: '8px', padding: '8px 10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+            <span style={{ color: '#0ff', fontWeight: 'bold', fontSize: '13px', letterSpacing: '1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{character.name}</span>
+            <span style={{ color: '#888', fontSize: '11px', flexShrink: 0 }}>Lv.{character.level}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <button
-              onClick={() => router.push('/dashboard')}
-              style={{ borderColor: '#555', color: '#888', background: 'none' }}
-            >
-              ← BACK
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+            <button onClick={() => router.push('/dashboard')} style={{ borderColor: '#555', color: '#888', background: 'none', padding: '6px 10px', fontSize: '10px' }}>
+              ←
             </button>
-            <button onClick={signOut} className="btn-danger">
-              QUIT
+            <button onClick={signOut} className="btn-danger" style={{ padding: '6px 10px', fontSize: '10px' }}>
+              ✕
             </button>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap', fontSize: '11px' }}>
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap', fontSize: '10px' }}>
           <span className="resource">
             <span style={{ color: '#ff0' }}>{goldIcon}</span>
             <span style={{ color: '#ff0' }}>{character.gold.toLocaleString()}</span>
-            <span style={{ color: '#888' }}>Gold</span>
           </span>
           <span className="resource">
             <span style={{ color: '#f0f' }}>{kpIcon}</span>
             <span style={{ color: '#f0f' }}>{character.knowledge.toLocaleString()}</span>
-            <span style={{ color: '#888' }}>KP</span>
           </span>
           <span className="resource">
-            <span style={{ color: '#0ff' }}>■</span>
-            <span style={{ color: '#888' }}>XP {(character.xp || 0).toLocaleString()}</span>
+            <span style={{ color: '#888' }}>XP {character.xp.toLocaleString()}</span>
           </span>
-          <span className="resource">
-            <span style={{ color: '#888' }}>AP {character.attribute_points}</span>
-          </span>
+          {character.attribute_points > 0 && (
+            <span className="resource" style={{ color: '#0ff' }}>
+              AP {character.attribute_points}
+            </span>
+          )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="bottom-nav" style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+      <div className="tab-bar">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
-              fontSize: '10px',
-              padding: '4px 10px',
-              minHeight: '44px',
               background: activeTab === tab.id ? 'var(--accent-dim)' : 'none',
               borderColor: activeTab === tab.id ? 'var(--accent)' : 'var(--border)',
               color: activeTab === tab.id ? '#0ff' : '#555',
             }}
           >
-            [ {tab.label} ]
+            {tab.label}
           </button>
         ))}
       </div>

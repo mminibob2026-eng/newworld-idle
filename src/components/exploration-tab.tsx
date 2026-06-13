@@ -105,11 +105,18 @@ export function ExplorationTab({
             const pct = Math.min(100, (elapsed / total) * 100)
             return (
               <div key={exp.id} className="card active" style={{ marginBottom: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#0ff', fontSize: '11px' }}>
-                    {region?.name || exp.region}
-                  </span>
-                  <span className="exploring-badge">IN PROGRESS</span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  {region?.icon_path && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={region.icon_path} alt={region.name}
+                      style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '2px' }} />
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <span style={{ color: '#0ff', fontSize: '11px' }}>
+                      {region?.name || exp.region}
+                    </span>
+                    <span className="exploring-badge" style={{ marginLeft: '6px' }}>IN PROGRESS</span>
+                  </div>
                 </div>
                 <div className="progress-bar" style={{ marginTop: '6px' }}>
                   <div className="progress-fill gold" style={{ width: `${pct}%` }} />
@@ -135,6 +142,11 @@ export function ExplorationTab({
         {regions.map(region => {
           return (
             <div key={region.id} className="card">
+              {region.icon_path && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={region.icon_path} alt={region.name}
+                  style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '2px', marginBottom: '6px' }} />
+              )}
               <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{region.name}</div>
               <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{region.description}</div>
               <div style={{ fontSize: '10px', marginTop: '6px', color: '#888' }}>
