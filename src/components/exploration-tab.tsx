@@ -93,7 +93,12 @@ export function ExplorationTab({
     loadData()
   }
 
-  if (loading) return <div style={{ color: '#888' }}>Loading regions...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '40px 20px' }}>
+      <div className="loading-spinner" />
+      <span style={{ color: '#888', fontSize: '11px' }}>Loading regions...</span>
+    </div>
+  )
 
   const activeExps = explorations.filter(e => !e.completed && !e.is_queued)
   const queuedExps = explorations.filter(e => e.is_queued)

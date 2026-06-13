@@ -14,12 +14,17 @@ export async function POST(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id, level')
+      .select('account_id, level, gold')
       .eq('id', characterId)
       .single()
 
     if (!char || char.account_id !== user.id) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
+    }
+
+    const GENERATE_COST = 25
+    if (char.gold < GENERATE_COST) {
+      return NextResponse.json({ error: `Need ${GENERATE_COST} gold to generate contracts` }, { status: 400 })
     }
 
     // Check if already has 3 active non-completed contracts
@@ -66,6 +71,12 @@ export async function POST(request: NextRequest) {
         expires_at: expiresAt.toISOString(),
       }
     })
+
+    // Deduct gold
+    await supabase
+      .from('characters')
+      .update({ gold: char.gold - GENERATE_COST })
+      .eq('id', characterId)
 
     const { data, error } = await supabase.from('contracts').insert(newContracts).select()
 

@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [error, setError] = useState('')
   const [fatalError, setFatalError] = useState('')
   const [bobCoins, setBobCoins] = useState(0)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user && !loading) router.push('/')
@@ -90,13 +91,15 @@ export default function Dashboard() {
     await (supabase as any).from('character_inventory').delete().eq('character_id', id)
     await (supabase as any).from('game_logs').delete().eq('character_id', id)
     await (supabase as any).from('characters').delete().eq('id', id)
+    setDeleteConfirm(null)
     loadCharacters()
   }
 
   if (loading || loadingChars) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <span style={{ color: '#0ff' }}>LOADING...</span>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
+        <div className="loading-spinner large" />
+        <span style={{ color: '#0ff', fontSize: '11px' }}>LOADING...</span>
       </div>
     )
   }
@@ -152,7 +155,7 @@ export default function Dashboard() {
               <button
                 className="btn-danger"
                 style={{ marginTop: '8px' }}
-                onClick={e => { e.stopPropagation(); deleteCharacter(char.id) }}
+                onClick={e => { e.stopPropagation(); setDeleteConfirm(char.id) }}
               >
                 DELETE
               </button>
@@ -195,6 +198,37 @@ export default function Dashboard() {
           <span>Bob Pass: <span style={{ color: '#888' }}>Free</span></span>
         </div>
       </div>
+
+      {/* Delete Character Confirmation Dialog */}
+      {deleteConfirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--bg-tertiary)', border: '1px solid var(--red)',
+            padding: '20px', maxWidth: '320px', width: '90%',
+            boxShadow: '0 0 30px rgba(255,0,0,0.2)',
+          }}>
+            <div style={{ color: '#f44', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+              ⚠️ Delete Character?
+            </div>
+            <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
+              This will permanently delete this character and all associated progress.
+              <span style={{ color: '#f44' }}> This cannot be undone.</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn-danger" style={{ flex: 1 }} onClick={() => deleteCharacter(deleteConfirm)}>
+                YES, DELETE
+              </button>
+              <button style={{ flex: 1 }} onClick={() => setDeleteConfirm(null)}>
+                CANCEL
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

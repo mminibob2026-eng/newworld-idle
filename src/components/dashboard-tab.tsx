@@ -76,6 +76,7 @@ export function DashboardTab({
   const activeProfs = professions.filter((p: Profession) => p.is_active)
   const queuedProfs = professions.filter((p: Profession) => p.is_queued)
   const activeExp = explorations.find((e: Exploration) => !e.completed && !e.is_queued && e.finish_at)
+  const queuedExps = explorations.filter((e: Exploration) => e.is_queued)
 
   const assignPoint = async (attr: string) => {
     if (!character.attribute_points) return
@@ -215,14 +216,42 @@ export function DashboardTab({
         {queuedProfs.map(qp => (
           <div key={qp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', color: '#ff0', borderTop: '1px solid var(--border)', marginTop: '4px' }}>
             <span style={{ fontSize: '16px' }}>⏳</span>
-            <span style={{ fontSize: '11px' }}>
+            <span style={{ fontSize: '11px', flex: 1 }}>
               Queued: {qp.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
               <span style={{ color: '#888', marginLeft: '6px' }}>(will auto-start)</span>
             </span>
+            <button
+              className="btn-danger"
+              style={{ fontSize: '9px', padding: '4px 8px', flex: '0 0 auto' }}
+              onClick={() => setCancelConfirm({ type: 'profession', id: qp.profession, name: qp.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) })}
+            >
+              CANCEL
+            </button>
           </div>
         ))}
 
-        {activeProfs.length === 0 && !activeExp && queuedProfs.length === 0 && (
+        {queuedExps.length > 0 && (
+          <div style={{ marginTop: '4px' }}>
+            {queuedExps.map(qe => (
+              <div key={qe.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', color: '#0ff', borderTop: '1px solid var(--border)' }}>
+                <span style={{ fontSize: '16px' }}>⏳</span>
+                <span style={{ fontSize: '11px', flex: 1 }}>
+                  Queued: {qe.region.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  <span style={{ color: '#888', marginLeft: '6px' }}>(will auto-start)</span>
+                </span>
+                <button
+                  className="btn-danger"
+                  style={{ fontSize: '9px', padding: '4px 8px', flex: '0 0 auto' }}
+                  onClick={() => setCancelConfirm({ type: 'exploration', id: qe.id, name: qe.region.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) })}
+                >
+                  CANCEL
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeProfs.length === 0 && !activeExp && queuedProfs.length === 0 && queuedExps.length === 0 && (
           <div style={{ textAlign: 'center', padding: '12px 0', color: '#555' }}>
             <div style={{ fontSize: '24px', marginBottom: '6px' }}>💤</div>
             <div style={{ fontSize: '11px' }}>All idle. Start an activity to progress!</div>

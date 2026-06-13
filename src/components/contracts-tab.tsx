@@ -129,7 +129,12 @@ export function ContractsTab({
     onRefresh()
   }
 
-  if (loading) return <div style={{ color: '#888' }}>Loading contracts...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '40px 20px' }}>
+      <div className="loading-spinner" />
+      <span style={{ color: '#888', fontSize: '11px' }}>Loading contracts...</span>
+    </div>
+  )
 
   const getItemName = (itemId: string) => {
     const item = storage.find((s: any) => s.item_id === itemId)
@@ -182,7 +187,7 @@ export function ContractsTab({
           className="btn-gold"
           style={{ width: '100%', marginBottom: '12px' }}
         >
-          {genLoading ? 'GENERATING...' : 'GENERATE CONTRACTS'}
+          {genLoading ? 'GENERATING...' : 'GENERATE CONTRACTS (25g)'}
         </button>
       )}
 

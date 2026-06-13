@@ -117,7 +117,12 @@ export function ProfessionTab({
     onRefresh()
   }
 
-  if (loading) return <div style={{ color: '#888' }}>Loading professions...</div>
+  if (loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '40px 20px' }}>
+      <div className="loading-spinner" />
+      <span style={{ color: '#888', fontSize: '11px' }}>Loading professions...</span>
+    </div>
+  )
 
   const activeCount = professions.filter(p => p.is_active).length
   const queuedCount = professions.filter(p => p.is_queued).length

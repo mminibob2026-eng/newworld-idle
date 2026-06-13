@@ -20,8 +20,9 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <span style={{ color: '#0ff' }}>LOADING...</span>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
+        <div className="loading-spinner large" />
+        <span style={{ color: '#0ff', fontSize: '11px' }}>LOADING...</span>
       </div>
     )
   }

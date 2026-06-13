@@ -48,6 +48,7 @@ function WorldPage() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
   const [notification, setNotification] = useState('')
   const [notificationType, setNotificationType] = useState<'info' | 'success' | 'error'>('info')
+  const [bobCoins, setBobCoins] = useState(0)
   const { rewards, addReward } = useRewardFeed()
 
   useEffect(() => {
@@ -128,13 +129,17 @@ function WorldPage() {
 
   const loadCharacter = async (id: string) => {
     const supabase = createClient()
-    const [charRes, storRes, profsRes] = await Promise.all([
+    const [charRes, storRes, profsRes, profileRes] = await Promise.all([
       (supabase as any).from('characters').select('*').eq('id', id).single(),
       (supabase as any).from('storage').select('*').eq('item_type', 'item'),
       (supabase as any).from('professions').select('*').eq('character_id', id),
+      (supabase as any).from('profiles').select('bob_coins').eq('id', user?.id).single(),
     ])
     const char = charRes.data
     setCharacter(char)
+    if (profileRes.data) {
+      setBobCoins(profileRes.data.bob_coins || 0)
+    }
 
     if (char) {
       let storageRows = (storRes.data ?? []) as any[]
@@ -228,8 +233,9 @@ function WorldPage() {
 
   if (loading || loadingChar || !character) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <span style={{ color: '#0ff' }}>LOADING...</span>
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
+        <div className="loading-spinner large" />
+        <span style={{ color: '#0ff', fontSize: '11px' }}>LOADING WORLD...</span>
       </div>
     )
   }
@@ -289,6 +295,10 @@ function WorldPage() {
           <span className="resource">
             <span style={{ color: '#f0f' }}>{kpIcon}</span>
             <span style={{ color: '#f0f' }}>{character.knowledge.toLocaleString()}</span>
+          </span>
+          <span className="resource">
+            <span style={{ color: '#ff8c00' }}>🪙</span>
+            <span style={{ color: '#ff8c00' }}>{bobCoins}</span>
           </span>
           <span className="resource">
             <span style={{ color: '#888' }}>XP {character.xp.toLocaleString()}</span>
