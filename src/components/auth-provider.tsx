@@ -60,11 +60,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     if (error) return error.message
 
-    const { error: profileError } = await (supabase as any).from('profiles').insert({
-      id: (await supabase.auth.getUser()).data.user?.id!,
-      username,
-    })
-    if (profileError) return profileError.message
+    // Profile is auto-created by DB trigger (migration 008), but insert if trigger hasn't run yet
+    const { data: { user: newUser } } = await supabase.auth.getUser()
+    if (newUser) {
+      const { error: profileError } = await (supabase as any).from('profiles').upsert({
+        id: newUser.id,
+        username,
+      }, { onConflict: 'id' }).maybeSingle()
+      if (profileError && !profileError.message?.includes('duplicate')) return profileError.message
+    }
 
     return null
   }

@@ -15,20 +15,30 @@ export default function Dashboard() {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [error, setError] = useState('')
+  const [fatalError, setFatalError] = useState('')
 
   useEffect(() => {
-    if (!user && !loading) router.push('/')
-    if (user) loadCharacters()
+    try {
+      if (!user && !loading) router.push('/')
+      if (user) loadCharacters()
+    } catch (e: any) {
+      setFatalError(e.message || String(e))
+    }
   }, [user, loading, router])
 
   const loadCharacters = async () => {
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('characters')
-      .select('*')
-      .eq('account_id', user!.id)
-      .order('created_at', { ascending: true })
-    setCharacters(data ?? [])
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('characters')
+        .select('*')
+        .eq('account_id', user!.id)
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      setCharacters(data ?? [])
+    } catch (e: any) {
+      setFatalError(`Failed to load characters: ${e.message}`)
+    }
     setLoadingChars(false)
   }
 
@@ -70,6 +80,18 @@ export default function Dashboard() {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <span style={{ color: '#0ff' }}>LOADING...</span>
+      </div>
+    )
+  }
+
+  if (fatalError) {
+    return (
+      <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px' }}>
+        <div className="panel">
+          <div className="panel-header" style={{ color: '#f44' }}>ERROR</div>
+          <pre style={{ color: '#f44', fontSize: '11px', whiteSpace: 'pre-wrap' }}>{fatalError}</pre>
+          <button onClick={() => router.push('/')} style={{ marginTop: '12px' }}>← BACK TO LOGIN</button>
+        </div>
       </div>
     )
   }
