@@ -434,7 +434,6 @@ export async function processOfflineProgress(characterId: string) {
 
 async function addCharacterXp(supabase: any, char: any, amount: number) {
   const newXp = char.xp + amount
-  const xpNeeded = XP_FOR_LEVEL(char.level)
   let newLevel = char.level
   let remainingXp = newXp
 

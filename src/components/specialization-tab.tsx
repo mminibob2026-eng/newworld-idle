@@ -54,7 +54,12 @@ export function SpecializationTab({ character, onRefresh }: { character: any; on
     })
     const data = await res.json()
     if (!res.ok) {
-      alert(data.error)
+      // Use a toast notification instead of alert
+      const toast = document.createElement('div')
+      toast.className = 'toast error'
+      toast.textContent = data.error || 'Failed to choose path'
+      document.getElementById('toast-container')?.appendChild(toast)
+      setTimeout(() => toast.remove(), 3000)
       return
     }
     setShowConfirm(null)

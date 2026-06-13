@@ -31,16 +31,18 @@ const TUTORIAL_STEPS = [
   },
 ]
 
-export function TutorialOverlay({ onComplete }: { onComplete: () => void }) {
+export function TutorialOverlay({ onComplete, userId }: { onComplete: () => void; userId?: string }) {
   const [step, setStep] = useState(0)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    const done = localStorage.getItem('nw-tutorial-done')
-    if (!done) {
+    if (!userId) return
+    // Check if tutorial is done for this specific account
+    const accountId = localStorage.getItem('nw-tutorial-account')
+    if (accountId !== userId) {
       setVisible(true)
     }
-  }, [])
+  }, [userId])
 
   if (!visible) return null
 
@@ -62,7 +64,9 @@ export function TutorialOverlay({ onComplete }: { onComplete: () => void }) {
   }
 
   const finish = () => {
-    localStorage.setItem('nw-tutorial-done', 'true')
+    if (userId) {
+      localStorage.setItem('nw-tutorial-account', userId)
+    }
     setVisible(false)
     onComplete()
   }

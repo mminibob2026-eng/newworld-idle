@@ -29,7 +29,7 @@ export function useRewardFeed() {
     setRewards(prev => [...prev, { ...reward, id }])
     setTimeout(() => {
       setRewards(prev => prev.filter(r => r.id !== id))
-    }, 5000)
+    }, 8000)
   }
 
   return { rewards, addReward }

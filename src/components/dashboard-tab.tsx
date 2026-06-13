@@ -181,7 +181,7 @@ export function DashboardTab({
               </div>
               <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
                 <button className="btn-danger" style={{ fontSize: '9px', padding: '4px 8px', flex: 1 }}
-                  onClick={() => setCancelConfirm({ type: 'profession', id: prof.profession, name: prof.profession })}>
+                  onClick={() => setCancelConfirm({ type: 'profession', id: prof.profession, name: prof.profession.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) })}>
                   STOP
                 </button>
               </div>
@@ -245,10 +245,10 @@ export function DashboardTab({
             <div style={{ color: '#f44', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
               ⚠️ Stop Activity?
             </div>
-            <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
-              You will lose all progress on this {cancelConfirm.type}. 
-              <span style={{ color: '#f44' }}>This cannot be undone.</span>
-            </div>
+        <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
+          You will lose all progress on {cancelConfirm.name}. 
+          <span style={{ color: '#f44' }}>This cannot be undone.</span>
+        </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-danger" style={{ flex: 1 }} onClick={cancelActivity}>
                 YES, STOP

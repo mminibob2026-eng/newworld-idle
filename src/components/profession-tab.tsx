@@ -177,8 +177,12 @@ export function ProfessionTab({
                             : '0%'
                         }} />
                       </div>
-                      <button style={{ fontSize: '10px', marginTop: '6px', width: '100%' }} onClick={() => claimProfession(prof.id)}>
-                        CLAIM
+                      <button
+                        style={{ fontSize: '10px', marginTop: '6px', width: '100%' }}
+                        disabled={new Date(learned.finish_at!) > new Date()}
+                        onClick={() => claimProfession(prof.id)}
+                      >
+                        {new Date(learned.finish_at!) > new Date() ? 'IN PROGRESS...' : 'CLAIM'}
                       </button>
                     </div>
                   ) : !learned.is_queued && (

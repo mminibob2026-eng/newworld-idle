@@ -250,7 +250,7 @@ function WorldPage() {
   return (
     <div className="world-container" style={{ maxWidth: '700px', margin: '0 auto', padding: '8px' }}>
       <RewardFeed rewards={rewards} />
-      <TutorialOverlay onComplete={() => {}} />
+      {user && <TutorialOverlay onComplete={() => {}} userId={user.id} />}
 
       {notification && (
         <div style={{

@@ -137,8 +137,9 @@ export function ContractsTab({
   }
 
   const today = new Date()
-  const resetDate = dailyInfo?.resetDate ? new Date(dailyInfo.resetDate + 'T23:59:59') : new Date()
-  const msUntilReset = resetDate.getTime() - today.getTime() + 86400000
+  const resetDateStr = dailyInfo?.resetDate || new Date().toISOString().slice(0, 10)
+  const resetDate = new Date(resetDateStr + 'T23:59:59')
+  const msUntilReset = resetDate.getTime() - today.getTime()
   const hoursToReset = Math.floor(msUntilReset / 3600000)
   const minsToReset = Math.floor((msUntilReset % 3600000) / 60000)
 
@@ -226,7 +227,7 @@ export function ContractsTab({
                 {contract.reward_knowledge > 0 && <span style={{ color: '#f0f' }}> | {contract.reward_knowledge} KP</span>}
               </div>
               <div style={{ fontSize: '9px', color: '#555', marginTop: '2px' }}>
-                Faction: {contract.faction.replace(/_/g, ' ')}
+                Faction: {contract.faction.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
               </div>
               {itemSources[contract.requirement_item] && (
                 <div style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>
@@ -244,9 +245,9 @@ export function ContractsTab({
                 <button
                   onClick={() => rerollContract(contract.id)}
                   title="Re-roll contract (costs gold)"
-                  style={{ flex: '0 0 auto', fontSize: '16px' }}
+                  style={{ flex: '0 0 auto', fontSize: '10px', padding: '4px 8px' }}
                 >
-                  ↻
+                  ↻ REROLL
                 </button>
               </div>
             </div>

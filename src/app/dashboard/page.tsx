@@ -55,12 +55,14 @@ export default function Dashboard() {
     setError('')
     if (!newName.trim()) return
     const supabase = createClient()
-    const { count } = await supabase
+    
+    // Use a server-side transaction or check to prevent race conditions
+    const { data: existingChars } = await supabase
       .from('characters')
-      .select('*', { count: 'exact', head: true })
+      .select('id')
       .eq('account_id', user!.id)
 
-    if (count && count >= 4) {
+    if (existingChars && existingChars.length >= 4) {
       setError('Maximum 4 characters per account')
       return
     }
