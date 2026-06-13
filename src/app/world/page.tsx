@@ -196,6 +196,21 @@ function WorldPage() {
     if (character) loadCharacter(character.id)
   }, [character?.id])
 
+  const tabContent = useMemo(() => {
+    if (!character) return null
+    switch (activeTab) {
+      case 'dashboard': return <DashboardTab key="dash" character={character} professions={professions} onRefresh={refresh} />
+      case 'gathering': return <ProfessionTab key="gather" category="gathering" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
+      case 'production': return <ProfessionTab key="craft" category="production" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
+      case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
+      case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
+      case 'storage': return <StorageView key="storage" storage={storage} onRefresh={refresh} />
+      case 'discoveries': return <DiscoveriesTab key="discover" accountId={character.account_id} />
+      case 'character': return <CharacterTab key="char" character={character} onRefresh={refresh} notify={notify} />
+      default: return null
+    }
+  }, [activeTab, character, professions, storage, refresh, notify])
+
   if (loading || loadingChar || !character) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -290,19 +305,7 @@ function WorldPage() {
 
       {/* Tab Content */}
       <div className="panel" style={{ minHeight: '300px' }}>
-        {useMemo(() => {
-          switch (activeTab) {
-            case 'dashboard': return <DashboardTab key="dash" character={character} professions={professions} onRefresh={refresh} />
-            case 'gathering': return <ProfessionTab key="gather" category="gathering" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
-            case 'production': return <ProfessionTab key="craft" category="production" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showReward={(d, n) => showProfessionReward(d, n)} />
-            case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
-            case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
-            case 'storage': return <StorageView key="storage" storage={storage} onRefresh={refresh} />
-            case 'discoveries': return <DiscoveriesTab key="discover" accountId={character.account_id} />
-            case 'character': return <CharacterTab key="char" character={character} onRefresh={refresh} notify={notify} />
-            default: return null
-          }
-        }, [activeTab, character, professions, storage, refresh, notify])}
+        {tabContent}
       </div>
     </div>
   )
