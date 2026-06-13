@@ -10,9 +10,11 @@ type Exploration = any
 export function ExplorationTab({
   characterId,
   notify,
+  showReward,
 }: {
   characterId: string
   notify: (msg: string) => void
+  showReward?: (data: any, regionName: string) => void
 }) {
   const [regions, setRegions] = useState<Region[]>([])
   const [explorations, setExplorations] = useState<Exploration[]>([])
@@ -65,14 +67,20 @@ export function ExplorationTab({
       notify(`Error: ${data.error}`)
       return
     }
-    if (data.discoveries && data.discoveries.length > 0) {
-      const names = data.discoveries.map((d: any) => d.name).join(', ')
-      notify(`Discovered: ${names}${data.gold > 0 ? ` (+${data.gold} Gold)` : ''}`)
-      if (data.discoveries.some((d: any) => d.rarity === 'rare' || d.rarity === 'epic' || d.rarity === 'legendary' || d.rarity === 'mythic')) {
-        playReward()
-      }
+    const exp = explorations.find(e => e.id === explorationId)
+    const regionName = regions.find(r => r.id === exp?.region)?.name || exp?.region || 'Unknown'
+    if (showReward) {
+      showReward(data, regionName)
     } else {
-      notify('Nothing special found this time.')
+      if (data.discoveries && data.discoveries.length > 0) {
+        const names = data.discoveries.map((d: any) => d.name).join(', ')
+        notify(`Discovered: ${names}${data.gold > 0 ? ` (+${data.gold} Gold)` : ''}`)
+        if (data.discoveries.some((d: any) => d.rarity === 'rare' || d.rarity === 'epic' || d.rarity === 'legendary' || d.rarity === 'mythic')) {
+          playReward()
+        }
+      } else {
+        notify('Nothing special found this time.')
+      }
     }
     loadData()
   }

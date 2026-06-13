@@ -203,7 +203,12 @@ export async function processOfflineProgress(characterId: string) {
     for (const d of found) {
       await supabase
         .from('player_discoveries')
-        .insert({ account_id: char.account_id, discovery_id: d.id })
+        .insert({
+          account_id: char.account_id,
+          discovery_id: d.id,
+          region_id: exp.region,
+          lore: d.lore || '',
+        })
         .select()
         .maybeSingle()
     }

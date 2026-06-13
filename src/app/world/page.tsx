@@ -13,7 +13,7 @@ import { StorageView } from '@/components/storage-view'
 import { DashboardTab } from '@/components/dashboard-tab'
 import { DiscoveriesTab } from '@/components/discoveries-tab'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
-import { playReward, playLevelUp } from '@/lib/sound'
+import { playReward, playLevelUp, playRare } from '@/lib/sound'
 
 type Character = any
 type Profession = any
@@ -59,27 +59,57 @@ function WorldPage() {
       if (data.professions?.length > 0 || data.explorations?.length > 0) {
         const profCount = data.professions?.length || 0
         const expCount = data.explorations?.length || 0
-        notify(`Offline progress: ${profCount} professions, ${expCount} explorations completed!`)
-        playReward()
+
+        const allItems: { name: string; qty: number; rarity: string }[] = []
+        const allLevelUps: { profession: string; from: number; to: number }[] = []
+        const allDiscoveries: { name: string; rarity: string; region?: string; lore?: string }[] = []
+        let totalXp = 0
+        let totalGold = 0
+        let hasRare = false
+        let hasLevelUp = false
 
         for (const p of data.professions || []) {
-          addReward({
-            type: 'profession',
-            items: Object.entries(p.items || {}).map(([id, info]: any) => ({
-              name: info.name || id,
-              qty: info.qty || info,
-              rarity: info.rarity || 'common',
-            })),
-            xp: p.xpGained || 0,
+          const items = Object.entries(p.items || {}).map(([id, info]: any) => {
+            const rarity = info.rarity || 'common'
+            if (['rare', 'epic', 'legendary', 'mythic'].includes(rarity)) hasRare = true
+            return { name: info.name || id, qty: info.qty || info, rarity }
           })
+          allItems.push(...items)
+          totalXp += p.xpGained || 0
+          if (p.levelUps > 0) {
+            allLevelUps.push({
+              profession: p.name || 'Unknown',
+              from: Math.max(1, (p.level || 1) - p.levelUps),
+              to: p.level || 1,
+            })
+          }
         }
+
         for (const e of data.explorations || []) {
-          addReward({
-            type: 'exploration',
-            items: e.discoveries?.map((d: any) => ({ name: d.name, qty: 1, rarity: d.rarity || 'common' })) || [],
-            gold: e.gold || 0,
+          const discoveries = (e.discoveries || []).map((d: any) => {
+            if (['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity)) hasRare = true
+            return { name: d.name, rarity: d.rarity || 'common', region: e.region || e.name, lore: d.lore }
           })
+          allDiscoveries.push(...discoveries)
+          totalGold += e.gold || 0
         }
+
+        if (hasRare) playRare()
+        else if (totalXp > 0) playReward()
+
+        const totalMin = Math.floor((data._elapsedSeconds || 0) / 60)
+
+        addReward({
+          title: `OFFLINE PROGRESS (${profCount + expCount} activities)`,
+          timeAway: totalMin || undefined,
+          items: allItems.length > 0 ? allItems : undefined,
+          xp: totalXp || undefined,
+          gold: totalGold || undefined,
+          levelUps: allLevelUps.length > 0 ? allLevelUps : undefined,
+          discoveries: allDiscoveries.length > 0 ? allDiscoveries : undefined,
+        })
+
+        if (hasLevelUp) playLevelUp()
         loadCharacter(id)
       }
     } catch {
@@ -121,6 +151,47 @@ function WorldPage() {
       setProfessions(profs ?? [])
     }
     setLoadingChar(false)
+  }
+
+  const showExplorationReward = (data: any, regionName: string) => {
+    const discoveries = (data.discoveries || []).map((d: any) => ({
+      name: d.name, rarity: d.rarity || 'common', region: regionName, lore: d.lore,
+    }))
+    const hasRare = discoveries.some((d: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity))
+    if (hasRare) playRare()
+    else if (discoveries.length > 0) playReward()
+
+    addReward({
+      title: `EXPLORATION: ${regionName.toUpperCase()}`,
+      gold: data.gold || 0,
+      discoveries: discoveries.length > 0 ? discoveries : undefined,
+    })
+    notify(discoveries.length > 0 ? `Discovered ${discoveries.map((d: any) => d.name).join(', ')}` : 'Nothing special found.')
+  }
+
+  const showProfessionReward = (data: any, professionName: string) => {
+    const items = Object.values(data.items || {}).map((i: any) => ({
+      name: i.name, qty: i.qty, rarity: i.rarity || 'common',
+    }))
+    const hasRare = items.some((i: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity))
+    const levelUps: { profession: string; from: number; to: number }[] = []
+    if (data.levelUps > 0) {
+      levelUps.push({ profession: professionName, from: Math.max(1, (data.levelUps || 1) - 1), to: data.levelUps || 1 })
+    }
+
+    if (hasRare) playRare()
+    else playReward()
+    if (data.charLeveledUp) playLevelUp()
+
+    addReward({
+      title: `CLAIMED: ${professionName.toUpperCase()}`,
+      items: items.length > 0 ? items : undefined,
+      xp: data.xpGained || 0,
+      levelUps: levelUps.length > 0 ? levelUps : undefined,
+      charLevelUp: data.charLeveledUp ? { from: data.newCharLevel - 1, to: data.newCharLevel } : undefined,
+    })
+    notify(`[${professionName}] +${data.xpGained} XP`)
+    loadCharacter(character.id)
   }
 
   const notify = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -178,11 +249,11 @@ function WorldPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <button
               onClick={() => router.push('/dashboard')}
-              style={{ fontSize: '10px', padding: '2px 8px', borderColor: '#555', color: '#888', background: 'none' }}
+              style={{ borderColor: '#555', color: '#888', background: 'none' }}
             >
-              BACK
+              ← BACK
             </button>
-            <button onClick={signOut} className="btn-danger" style={{ fontSize: '10px', padding: '2px 8px' }}>
+            <button onClick={signOut} className="btn-danger">
               QUIT
             </button>
           </div>
@@ -210,7 +281,7 @@ function WorldPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+      <div className="bottom-nav" style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -218,6 +289,7 @@ function WorldPage() {
             style={{
               fontSize: '10px',
               padding: '4px 10px',
+              minHeight: '44px',
               background: activeTab === tab.id ? 'var(--accent-dim)' : 'none',
               borderColor: activeTab === tab.id ? 'var(--accent)' : 'var(--border)',
               color: activeTab === tab.id ? '#0ff' : '#555',
@@ -245,6 +317,7 @@ function WorldPage() {
             professions={professions}
             onRefresh={() => loadCharacter(character.id)}
             notify={notify}
+            showReward={(data, name) => showProfessionReward(data, name)}
           />
         )}
         {activeTab === 'production' && (
@@ -255,12 +328,14 @@ function WorldPage() {
             professions={professions}
             onRefresh={() => loadCharacter(character.id)}
             notify={notify}
+            showReward={(data, name) => showProfessionReward(data, name)}
           />
         )}
         {activeTab === 'exploration' && (
           <ExplorationTab
             characterId={character.id}
             notify={notify}
+            showReward={(data, name) => showExplorationReward(data, name)}
           />
         )}
         {activeTab === 'contracts' && (
@@ -351,7 +426,7 @@ function CharacterTab({ character, onRefresh, notify }: { character: Character; 
             <div style={{ color: '#555', fontSize: '9px', marginTop: '4px' }}>{attr.desc}</div>
             {character.attribute_points > 0 && (
               <button
-                style={{ fontSize: '9px', padding: '1px 6px', marginTop: '6px', width: '100%' }}
+                style={{ marginTop: '6px', width: '100%' }}
                 onClick={() => assignPoint(attr.key)}
               >
                 +1

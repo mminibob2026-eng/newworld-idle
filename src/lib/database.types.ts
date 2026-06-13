@@ -205,6 +205,7 @@ export type Database = {
           effect_value: string | null
           icon_path: string
           id: string
+          lore: string
           name: string
           rarity: string
         }
@@ -216,6 +217,7 @@ export type Database = {
           effect_value?: string | null
           icon_path?: string
           id: string
+          lore?: string
           name: string
           rarity?: string
         }
@@ -560,18 +562,24 @@ export type Database = {
           discovered_at: string
           discovery_id: string
           id: string
+          region_id: string | null
+          lore: string
         }
         Insert: {
           account_id: string
           discovered_at?: string
           discovery_id: string
           id?: string
+          region_id?: string | null
+          lore?: string
         }
         Update: {
           account_id?: string
           discovered_at?: string
           discovery_id?: string
           id?: string
+          region_id?: string | null
+          lore?: string
         }
         Relationships: [
           {

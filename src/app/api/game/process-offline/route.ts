@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     const { data: char } = await supabase
       .from('characters')
-      .select('account_id')
+      .select('account_id, last_active_at')
       .eq('id', characterId)
       .single()
 
@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await processOfflineProgress(characterId)
-    return NextResponse.json(result)
+    return NextResponse.json({
+      ...result,
+      _elapsedSeconds: Math.floor((Date.now() - new Date(char.last_active_at || Date.now()).getTime()) / 1000),
+    })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

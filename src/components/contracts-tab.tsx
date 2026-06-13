@@ -171,9 +171,9 @@ export function ContractsTab({
                   COMPLETE
                 </button>
                 <button
-                  style={{ fontSize: '10px', flex: 0, padding: '4px 8px' }}
                   onClick={() => rerollContract(contract.id)}
                   title="Re-roll contract (costs gold)"
+                  style={{ flex: '0 0 auto', fontSize: '16px' }}
                 >
                   ↻
                 </button>

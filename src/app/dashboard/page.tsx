@@ -82,7 +82,7 @@ export default function Dashboard() {
         </h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ color: '#888', fontSize: '11px' }}>{user?.email}</span>
-          <button onClick={signOut} className="btn-danger" style={{ fontSize: '10px', padding: '3px 8px' }}>
+          <button onClick={signOut} className="btn-danger">
             LOGOUT
           </button>
         </div>
@@ -112,7 +112,7 @@ export default function Dashboard() {
               </div>
               <button
                 className="btn-danger"
-                style={{ fontSize: '9px', padding: '2px 6px', marginTop: '8px' }}
+                style={{ marginTop: '8px' }}
                 onClick={e => { e.stopPropagation(); deleteCharacter(char.id) }}
               >
                 DELETE

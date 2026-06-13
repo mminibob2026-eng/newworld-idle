@@ -16,6 +16,7 @@ export function ProfessionTab({
   professions,
   onRefresh,
   notify,
+  showReward,
 }: {
   category: string
   characterId: string
@@ -23,6 +24,7 @@ export function ProfessionTab({
   professions: Profession[]
   onRefresh: () => void
   notify: (msg: string) => void
+  showReward?: (data: any, professionName: string) => void
 }) {
   const [available, setAvailable] = useState<ContentProfession[]>([])
   const [rewards, setRewards] = useState<Record<string, ContentReward[]>>({})
@@ -94,15 +96,18 @@ export function ProfessionTab({
       notify(`Error: ${data.error}`)
       return
     }
-    const itemSummary = Object.values(data.items).map((i: any) => `${i.name}x${i.qty}`).join(', ')
-
-    const hasRare = Object.values(data.items).some((i: any) =>
-      ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity)
-    )
-    if (hasRare) playReward()
-    if (data.charLeveledUp) playLevelUp()
-
-    notify(`[${professionId}] +${data.xpGained} XP | Got: ${itemSummary || 'nothing'}`)
+    const profName = available.find(p => p.id === professionId)?.name || professionId
+    if (showReward) {
+      showReward(data, profName)
+    } else {
+      const itemSummary = Object.values(data.items).map((i: any) => `${i.name}x${i.qty}`).join(', ')
+      const hasRare = Object.values(data.items).some((i: any) =>
+        ['rare', 'epic', 'legendary', 'mythic'].includes(i.rarity)
+      )
+      if (hasRare) playReward()
+      if (data.charLeveledUp) playLevelUp()
+      notify(`[${professionId}] +${data.xpGained} XP | Got: ${itemSummary || 'nothing'}`)
+    }
     onRefresh()
   }
 

@@ -49,3 +49,10 @@ export function playLevelUp() {
     setTimeout(() => playTone(n, 0.12, 'square', 0.07), i * 80)
   })
 }
+
+export function playDiscovery() {
+  playTone(1047, 0.1, 'sine', 0.05)
+  setTimeout(() => playTone(1319, 0.1, 'sine', 0.05), 120)
+  setTimeout(() => playTone(1568, 0.15, 'sine', 0.05), 240)
+  setTimeout(() => playTone(2093, 0.3, 'sine', 0.04), 360)
+}
