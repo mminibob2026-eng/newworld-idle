@@ -301,6 +301,22 @@ button:disabled {
   100% { box-shadow: 0 0 5px rgba(0, 255, 0, 0.2); }
 }
 
+/* Achievement styles */
+.achievement-claimed {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+}
+
+.achievement-pop {
+  animation: achievementPop 0.5s ease;
+}
+
+@keyframes achievementPop {
+  0% { transform: scale(1); box-shadow: 0 0 0 rgba(0, 255, 0, 0); }
+  50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0, 255, 0, 0.5); }
+  100% { transform: scale(1); box-shadow: 0 0 5px rgba(0, 255, 0, 0.2); }
+}
+
 /* Active session pulse border */
 .card.pulsing {
   animation: borderPulse 2s ease infinite;

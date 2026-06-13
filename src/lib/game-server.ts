@@ -25,6 +25,69 @@ function rarityQuality(attrs: { luck: number; intelligence: number }): number {
   return (attrs.luck * 0.01 + attrs.intelligence * 0.005) / 3
 }
 
+async function incrementCounter(supabase: any, accountId: string, key: string, amount: number = 1) {
+  const { data: existing } = await supabase
+    .from('achievement_counters')
+    .select('id, value')
+    .eq('account_id', accountId)
+    .eq('counter_key', key)
+    .single()
+
+  if (existing) {
+    await supabase
+      .from('achievement_counters')
+      .update({ value: existing.value + amount })
+      .eq('id', existing.id)
+  } else {
+    await supabase
+      .from('achievement_counters')
+      .insert({ account_id: accountId, counter_key: key, value: amount })
+  }
+}
+
+async function checkAchievements(supabase: any, accountId: string) {
+  const { data: counters } = await supabase
+    .from('achievement_counters')
+    .select('*')
+    .eq('account_id', accountId)
+
+  const { data: achievements } = await supabase
+    .from('content_achievements')
+    .select('*')
+
+  const { data: playerAchs } = await supabase
+    .from('player_achievements')
+    .select('*')
+    .eq('account_id', accountId)
+
+  const counterMap = Object.fromEntries((counters || []).map((c: any) => [c.counter_key, c.value]))
+  const playerMap = Object.fromEntries((playerAchs || []).map((pa: any) => [pa.achievement_id, pa]))
+
+  const newAchievements: any[] = []
+
+  for (const ach of achievements || []) {
+    if (playerMap[ach.id]) continue
+
+    const current = counterMap[ach.requirement_type] || 0
+    if (current >= ach.requirement_value) {
+      const { data: newAch } = await supabase
+        .from('player_achievements')
+        .insert({
+          account_id: accountId,
+          achievement_id: ach.id,
+          progress: current,
+          completed_at: new Date().toISOString(),
+        })
+        .select()
+        .single()
+
+      if (newAch) newAchievements.push({ ...newAch, achievement: ach })
+    }
+  }
+
+  return newAchievements
+}
+
 export async function processOfflineProgress(characterId: string) {
   const supabase = await createServerSupabase()
 
@@ -164,6 +227,20 @@ export async function processOfflineProgress(characterId: string) {
         .eq('id', queuedProf.id)
     }
 
+    // Track counters for achievements
+    for (const [itemId, qty] of Object.entries(items)) {
+      const itemName = itemId.toLowerCase()
+      if (itemName.includes('stone')) {
+        await incrementCounter(supabase, char.account_id, 'mine_stone', qty as number)
+      } else if (itemName.includes('wood')) {
+        await incrementCounter(supabase, char.account_id, 'chop_wood', qty as number)
+      } else if (itemName.includes('fish')) {
+        await incrementCounter(supabase, char.account_id, 'catch_fish', qty as number)
+      } else if (itemName.includes('crop') || itemName.includes('wheat') || itemName.includes('corn')) {
+        await incrementCounter(supabase, char.account_id, 'farm_crops', qty as number)
+      }
+    }
+
     results.push({
       type: 'profession',
       name: profData.name,
@@ -241,6 +318,17 @@ export async function processOfflineProgress(characterId: string) {
         .maybeSingle()
     }
 
+    // Track exploration counters
+    await incrementCounter(supabase, char.account_id, 'complete_exploration', 1)
+    const rareDiscs = found.filter((d: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity))
+    if (rareDiscs.length > 0) {
+      await incrementCounter(supabase, char.account_id, 'discover_rare', rareDiscs.length)
+    }
+    const mythicDiscs = found.filter((d: any) => d.rarity === 'mythic')
+    if (mythicDiscs.length > 0) {
+      await incrementCounter(supabase, char.account_id, 'find_mythic', mythicDiscs.length)
+    }
+
     if (value > 0) {
       await supabase
         .from('characters')
@@ -298,7 +386,13 @@ export async function processOfflineProgress(characterId: string) {
     })
   }
 
-  return { professions: results.filter(r => r.type === 'profession'), explorations: results.filter(r => r.type === 'exploration') }
+  const newAchievements = await checkAchievements(supabase, char.account_id)
+
+  return {
+    professions: results.filter(r => r.type === 'profession'),
+    explorations: results.filter(r => r.type === 'exploration'),
+    newAchievements,
+  }
 }
 
 async function addCharacterXp(supabase: any, char: any, amount: number) {
@@ -478,6 +572,20 @@ export async function claimProfessionRewards(characterId: string, professionId: 
     }
   }
 
+  // Track counters
+  for (const [itemId, info] of Object.entries(items)) {
+    const itemName = itemId.toLowerCase()
+    if (itemName.includes('stone')) {
+      await incrementCounter(supabase, char.account_id, 'mine_stone', (info as any).qty)
+    } else if (itemName.includes('wood')) {
+      await incrementCounter(supabase, char.account_id, 'chop_wood', (info as any).qty)
+    } else if (itemName.includes('fish')) {
+      await incrementCounter(supabase, char.account_id, 'catch_fish', (info as any).qty)
+    } else if (itemName.includes('crop') || itemName.includes('wheat') || itemName.includes('corn')) {
+      await incrementCounter(supabase, char.account_id, 'farm_crops', (info as any).qty)
+    }
+  }
+
   const charResult = await addCharacterXp(supabase, char, xpGained)
 
   await supabase
@@ -489,7 +597,9 @@ export async function claimProfessionRewards(characterId: string, professionId: 
       details: { profession: professionId, actions, xp_gained: xpGained, items_gained: items },
     })
 
-  return { actions, xpGained, levelUps: profLevelUps, items, charLeveledUp: charResult.leveledUp, newCharLevel: charResult.newLevel }
+  const newAchievements = await checkAchievements(supabase, char.account_id)
+
+  return { actions, xpGained, levelUps: profLevelUps, items, charLeveledUp: charResult.leveledUp, newCharLevel: charResult.newLevel, newAchievements }
 }
 
 export async function completeContract(contractId: string) {
@@ -576,6 +686,13 @@ export async function completeContract(contractId: string) {
       details: { contract_id: contractId, item: contract.requirement_item, qty: contract.requirement_qty, gold: goldReward, kp: kpReward },
     })
 
+  // Track counters
+  await incrementCounter(supabase, char.account_id, 'complete_contract', 1)
+  await incrementCounter(supabase, char.account_id, 'earn_gold', goldReward)
+  await incrementCounter(supabase, char.account_id, 'spend_gold', contract.requirement_qty * 2) // approximate item value
+
+  const newAchievements = await checkAchievements(supabase, char.account_id)
+
   const remaining = 12 - (completedToday + 1)
 
   return {
@@ -585,5 +702,6 @@ export async function completeContract(contractId: string) {
     contractsRemainingToday: remaining,
     contractsMaxDaily: 12,
     contractsResetDate: resetDate,
+    newAchievements,
   }
 }

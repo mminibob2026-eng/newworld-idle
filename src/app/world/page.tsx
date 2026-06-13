@@ -16,12 +16,14 @@ import { ProfessionsView } from '@/components/professions-view'
 import { CollectionView } from '@/components/collection-view'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
 import { TutorialOverlay } from '@/components/tutorial-overlay'
+import { AchievementsTab } from '@/components/achievements-tab'
+import { SpecializationTab } from '@/components/specialization-tab'
 import { playReward, playLevelUp, playRare, initAudio } from '@/lib/sound'
 
 type Character = any
 type Profession = any
 
-type Tab = 'home' | 'professions' | 'exploration' | 'contracts' | 'collection'
+type Tab = 'home' | 'professions' | 'exploration' | 'contracts' | 'collection' | 'achievements' | 'specialization'
 
 export default function WorldPageWrapper() {
   return (
@@ -217,6 +219,8 @@ function WorldPage() {
       case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
       case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
       case 'collection': return <CollectionView key="collect" accountId={character.account_id} storage={storage} onRefresh={refresh} />
+      case 'achievements': return <AchievementsTab key="achievements" accountId={character.account_id} />
+      case 'specialization': return <SpecializationTab key="specialization" character={character} onRefresh={refresh} />
       default: return null
     }
   }, [activeTab, character, professions, storage, refresh, notify])
@@ -238,6 +242,8 @@ function WorldPage() {
     { id: 'exploration', label: 'EXPLORE' },
     { id: 'contracts', label: 'CONTRACTS' },
     { id: 'collection', label: 'COLLECTION' },
+    { id: 'achievements', label: 'ACHIEVE' },
+    { id: 'specialization', label: 'PATH' },
   ]
 
   return (
