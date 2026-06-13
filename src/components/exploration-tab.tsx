@@ -142,12 +142,18 @@ export function ExplorationTab({
         {regions.map(region => {
           return (
             <div key={region.id} className="card">
-              {region.icon_path && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={region.icon_path} alt={region.name}
-                  style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '2px', marginBottom: '6px' }} />
-              )}
-              <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{region.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                {region.icon_path ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={region.icon_path} alt={region.name}
+                    style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '2px', border: '1px solid var(--border)' }} />
+                ) : (
+                  <div style={{ width: '36px', height: '36px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '14px' }}>
+                    ?
+                  </div>
+                )}
+                <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{region.name}</div>
+              </div>
               <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{region.description}</div>
               <div style={{ fontSize: '10px', marginTop: '6px', color: '#888' }}>
                 Requires Lv.{region.required_level} | {region.exploration_base_time} min
