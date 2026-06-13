@@ -200,20 +200,6 @@ export default function AdminItemsPage() {
                 </div>
               </div>
             ))}
-            {discoveryItems.length > 0 && (
-              <div>
-                <h3 style={{ color: '#f0f', fontSize: '11px', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-                  DISCOVERY ITEMS ({discoveryItems.length})
-                </h3>
-                <div className="feature-grid">
-                  {discoveryItems.map(item => (
-                    <ImageUploader key={item.id} item={item} contentType="item"
-                      state={imageState[`item:${item.id}`]}
-                      onUpload={(f) => handleUpload('item', item.id, f)} />
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )
       })()}
