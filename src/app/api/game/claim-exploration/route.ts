@@ -64,6 +64,41 @@ export async function POST(request: NextRequest) {
       .update({ completed: true, discoveries: found })
       .eq('id', explorationId)
 
+    // Check for queued exploration and auto-start it
+    const { data: queuedExp } = await supabase
+      .from('exploration')
+      .select('*')
+      .eq('character_id', exp.character_id)
+      .eq('is_queued', true)
+      .maybeSingle()
+
+    let autoStarted: any = null
+    if (queuedExp) {
+      const { data: queuedRegion } = await supabase
+        .from('content_regions')
+        .select('exploration_base_time')
+        .eq('id', queuedExp.region)
+        .single()
+
+      if (queuedRegion) {
+        const dur = Math.floor(queuedRegion.exploration_base_time * (1 - char.endurance * 0.01))
+        const finalDur = Math.max(dur, 5)
+        const now = new Date()
+        const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
+
+        await supabase
+          .from('exploration')
+          .update({
+            is_queued: false,
+            started_at: now.toISOString(),
+            finish_at: finishAt.toISOString(),
+          })
+          .eq('id', queuedExp.id)
+
+        autoStarted = { region: queuedExp.region, finishAt: finishAt.toISOString() }
+      }
+    }
+
     if (value > 0) {
       await supabase
         .from('characters')
@@ -91,7 +126,7 @@ export async function POST(request: NextRequest) {
       details: { region: exp.region, discoveries: found, gold: value },
     })
 
-    return NextResponse.json({ discoveries: found, gold: value })
+    return NextResponse.json({ discoveries: found, gold: value, autoStarted })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 400 })
   }

@@ -7,6 +7,7 @@ const TABLE_MAP: Record<string, string> = {
   item: 'content_items',
   region: 'content_regions',
   discovery: 'content_discoveries',
+  profession: 'content_professions',
 }
 
 const BUCKET = 'game-assets'

@@ -136,6 +136,34 @@ export async function processOfflineProgress(characterId: string) {
 
     await addCharacterXp(supabase, char, xpGained)
 
+    // Auto-start queued profession in same category if exists
+    const { data: queuedProf } = await supabase
+      .from('professions')
+      .select('*')
+      .eq('character_id', characterId)
+      .eq('category', profData.category)
+      .eq('is_queued', true)
+      .maybeSingle()
+
+    if (queuedProf) {
+      const endBonus = 1 + char.endurance * 0.05
+      const queueDur = Math.floor(30 * endBonus)
+      const maxQueueDur = Math.floor(480 * endBonus)
+      const finalQueueDur = Math.min(queueDur, maxQueueDur)
+      const queueNow = new Date()
+      const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
+
+      await supabase
+        .from('professions')
+        .update({
+          is_queued: false,
+          is_active: true,
+          started_at: queueNow.toISOString(),
+          finish_at: queueFinishAt.toISOString(),
+        })
+        .eq('id', queuedProf.id)
+    }
+
     results.push({
       type: 'profession',
       name: profData.name,
@@ -378,6 +406,44 @@ export async function claimProfessionRewards(characterId: string, professionId: 
       finish_at: null,
     })
     .eq('id', prof.id)
+
+  // Check for queued profession in same category and auto-start it
+  const queuedCategory = profData?.category
+  if (queuedCategory) {
+    const { data: queued } = await supabase
+      .from('professions')
+      .select('*')
+      .eq('character_id', characterId)
+      .eq('category', queuedCategory)
+      .eq('is_queued', true)
+      .maybeSingle()
+
+    if (queued) {
+      const endBonus = 1 + char.endurance * 0.05
+      const queueDur = Math.floor(30 * endBonus)
+      const maxQueueDur = Math.floor(480 * endBonus)
+      const finalQueueDur = Math.min(queueDur, maxQueueDur)
+      const queueNow = new Date()
+      const queueFinishAt = new Date(queueNow.getTime() + finalQueueDur * 60 * 1000)
+
+      await supabase
+        .from('professions')
+        .update({
+          is_queued: false,
+          is_active: true,
+          started_at: queueNow.toISOString(),
+          finish_at: queueFinishAt.toISOString(),
+        })
+        .eq('id', queued.id)
+
+      await supabase.from('game_logs').insert({
+        account_id: char.account_id,
+        character_id: characterId,
+        action: 'auto_start_queued',
+        details: { profession: queued.profession, category: queuedCategory },
+      })
+    }
+  }
 
   const charResult = await addCharacterXp(supabase, char, xpGained)
 

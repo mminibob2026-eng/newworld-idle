@@ -51,7 +51,11 @@ export function ExplorationTab({
       notify(`Error: ${data.error}`)
       return
     }
-    notify(`Exploring ${region.name}! ETA: ${data.actualDuration} min`)
+    if (data.queued) {
+      notify(data.message || `Exploration queue: will auto-start when current finishes.`)
+    } else {
+      notify(`Exploring ${region.name}! ETA: ${data.actualDuration} min`)
+    }
     loadData()
   }
 
@@ -74,7 +78,8 @@ export function ExplorationTab({
     } else {
       if (data.discoveries && data.discoveries.length > 0) {
         const names = data.discoveries.map((d: any) => d.name).join(', ')
-        notify(`Discovered: ${names}${data.gold > 0 ? ` (+${data.gold} Gold)` : ''}`)
+        let msg = `Discovered: ${names}${data.gold > 0 ? ` (+${data.gold} Gold)` : ''}`
+        notify(msg)
         if (data.discoveries.some((d: any) => d.rarity === 'rare' || d.rarity === 'epic' || d.rarity === 'legendary' || d.rarity === 'mythic')) {
           playReward()
         }
@@ -82,12 +87,16 @@ export function ExplorationTab({
         notify('Nothing special found this time.')
       }
     }
+    if (data.autoStarted) {
+      notify(`Next exploration auto-started!`)
+    }
     loadData()
   }
 
   if (loading) return <div style={{ color: '#888' }}>Loading regions...</div>
 
-  const activeExps = explorations.filter(e => !e.completed)
+  const activeExps = explorations.filter(e => !e.completed && !e.is_queued)
+  const queuedExps = explorations.filter(e => e.is_queued)
 
   return (
     <div>
@@ -96,9 +105,9 @@ export function ExplorationTab({
       {activeExps.length > 0 && (
         <div style={{ marginBottom: '12px' }}>
           <div style={{ color: '#888', fontSize: '10px', marginBottom: '6px' }}>
-            Active explorations ({activeExps.length}):
+            Active exploration:
           </div>
-          {activeExps.slice(0, 3).map(exp => {
+          {activeExps.map(exp => {
             const region = regions.find(r => r.id === exp.region)
             const elapsed = Date.now() - new Date(exp.started_at).getTime()
             const total = new Date(exp.finish_at).getTime() - new Date(exp.started_at).getTime()
@@ -130,11 +139,17 @@ export function ExplorationTab({
               </div>
             )
           })}
-          {activeExps.length > 3 && (
-            <div style={{ color: '#555', fontSize: '10px' }}>
-              +{activeExps.length - 3} more in queue
-            </div>
-          )}
+        </div>
+      )}
+
+      {queuedExps.length > 0 && (
+        <div style={{ marginBottom: '12px', padding: '8px', border: '1px solid #333', borderRadius: '2px', background: 'var(--bg-secondary)' }}>
+          <div style={{ color: '#ff0', fontSize: '10px' }}>
+            ⏳ Queued: {queuedExps.map(e => regions.find(r => r.id === e.region)?.name || e.region).join(', ')}
+          </div>
+          <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>
+            Will auto-start when active exploration completes.
+          </div>
         </div>
       )}
 

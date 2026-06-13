@@ -9,6 +9,7 @@ export default function AdminItemsPage() {
   const [items, setItems] = useState<ContentItem[]>([])
   const [regions, setRegions] = useState<ContentItem[]>([])
   const [discoveries, setDiscoveries] = useState<ContentItem[]>([])
+  const [professions, setProfessions] = useState<ContentItem[]>([])
   const [imageState, setImageState] = useState<Record<string, { uploading?: boolean; error?: string; success?: string }>>({})
   const [activeTab, setActiveTab] = useState('items')
   const [loading, setLoading] = useState(true)
@@ -18,14 +19,16 @@ export default function AdminItemsPage() {
   useEffect(() => { loadAll() }, [])
 
   const loadAll = async () => {
-    const [itemsRes, regionsRes, discoveriesRes] = await Promise.all([
+    const [itemsRes, regionsRes, discoveriesRes, professionsRes] = await Promise.all([
       supabase.from('content_items').select('*').order('category').order('name'),
       supabase.from('content_regions').select('*').order('name'),
       supabase.from('content_discoveries').select('*').order('name'),
+      supabase.from('content_professions').select('*').order('category').order('name'),
     ])
     setItems(itemsRes.data ?? [])
     setRegions(regionsRes.data ?? [])
     setDiscoveries(discoveriesRes.data ?? [])
+    setProfessions(professionsRes.data ?? [])
     setLoading(false)
   }
 
@@ -56,10 +59,14 @@ export default function AdminItemsPage() {
 
   if (loading) return <div style={{ padding: '20px', color: '#888' }}>Loading...</div>
 
-  const itemsNoImg = items.filter(it => !it.icon_path)
+  const gameItems = items.filter(it => it.category !== 'discovery')
+  const discoveryItems = items.filter(it => it.category === 'discovery')
+  const gameItemsNoImg = gameItems.filter(it => !it.icon_path)
+  const discoveryItemsNoImg = discoveryItems.filter(it => !it.icon_path)
   const regionsNoImg = regions.filter(r => !r.icon_path)
   const discoveriesNoImg = discoveries.filter(d => !d.icon_path)
-  const totalNoImg = itemsNoImg.length + regionsNoImg.length + discoveriesNoImg.length
+  const professionsNoImg = professions.filter(p => !p.icon_path)
+  const totalNoImg = gameItemsNoImg.length + regionsNoImg.length + discoveriesNoImg.length + professionsNoImg.length
 
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', color: '#ccc' }}>
@@ -70,7 +77,8 @@ export default function AdminItemsPage() {
 
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {[
-          { id: 'items', label: `Items (${items.length})` },
+          { id: 'items', label: `Items (${gameItems.length})` },
+          { id: 'professions', label: `Professions (${professions.length})` },
           { id: 'regions', label: `Regions (${regions.length})` },
           { id: 'discoveries', label: `Discoveries (${discoveries.length})` },
           { id: 'needs-images', label: `📷 Needs Images (${totalNoImg})` },
@@ -93,14 +101,26 @@ export default function AdminItemsPage() {
       {activeTab === 'needs-images' && (
         <div>
           <div className="panel-header">NEEDS IMAGES ({totalNoImg})</div>
-          {itemsNoImg.length > 0 && (
+          {gameItemsNoImg.length > 0 && (
             <>
-              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Items ({itemsNoImg.length})</h3>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Items ({gameItemsNoImg.length})</h3>
               <div className="feature-grid">
-                {itemsNoImg.map(item => (
+                {gameItemsNoImg.map(item => (
                   <ImageUploader key={`i:${item.id}`} item={item} contentType="item"
                     state={imageState[`item:${item.id}`]}
                     onUpload={(f) => handleUpload('item', item.id, f)} />
+                ))}
+              </div>
+            </>
+          )}
+          {professionsNoImg.length > 0 && (
+            <>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Professions ({professionsNoImg.length})</h3>
+              <div className="feature-grid">
+                {professionsNoImg.map(p => (
+                  <ImageUploader key={`p:${p.id}`} item={p} contentType="profession"
+                    state={imageState[`profession:${p.id}`]}
+                    onUpload={(f) => handleUpload('profession', p.id, f)} />
                 ))}
               </div>
             </>
@@ -129,18 +149,47 @@ export default function AdminItemsPage() {
               </div>
             </>
           )}
+          {discoveryItemsNoImg.length > 0 && (
+            <>
+              <h3 style={{ color: '#0ff', fontSize: '12px', margin: '12px 0 6px' }}>Discovery Items ({discoveryItemsNoImg.length}) — same images apply to discoveries</h3>
+              <div className="feature-grid">
+                {discoveryItemsNoImg.map(item => (
+                  <ImageUploader key={`di:${item.id}`} item={item} contentType="item"
+                    state={imageState[`item:${item.id}`]}
+                    onUpload={(f) => handleUpload('item', item.id, f)} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* === Items Tab === */}
       {activeTab === 'items' && (
         <div>
-          <div className="panel-header">ALL ITEMS ({items.length})</div>
+          <div className="panel-header">ALL ITEMS ({gameItems.length})</div>
+          <p style={{ color: '#555', fontSize: '9px', marginBottom: '8px' }}>
+            Discovery-category items ({discoveryItems.length}) are shown in the Discoveries tab instead.
+          </p>
           <div className="feature-grid">
-            {items.map(item => (
+            {gameItems.map(item => (
               <ImageUploader key={item.id} item={item} contentType="item"
                 state={imageState[`item:${item.id}`]}
                 onUpload={(f) => handleUpload('item', item.id, f)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* === Professions Tab === */}
+      {activeTab === 'professions' && (
+        <div>
+          <div className="panel-header">PROFESSIONS ({professions.length})</div>
+          <div className="feature-grid">
+            {professions.map(p => (
+              <ImageUploader key={p.id} item={p} contentType="profession"
+                state={imageState[`profession:${p.id}`]}
+                onUpload={(f) => handleUpload('profession', p.id, f)} />
             ))}
           </div>
         </div>

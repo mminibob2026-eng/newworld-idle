@@ -22,16 +22,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 })
     }
 
-    const { data: existing } = await supabase
+    const { data: active } = await supabase
       .from('exploration')
       .select('id')
       .eq('character_id', characterId)
       .eq('completed', false)
+      .eq('is_queued', false)
       .not('finish_at', 'is', null)
       .maybeSingle()
 
-    if (existing) {
-      return NextResponse.json({ error: 'Already have an active exploration. Claim it first.' }, { status: 400 })
+    if (active) {
+      const { data: queued } = await supabase
+        .from('exploration')
+        .select('id')
+        .eq('character_id', characterId)
+        .eq('is_queued', true)
+        .maybeSingle()
+
+      if (queued) {
+        return NextResponse.json({ error: 'Already have 1 active + 1 queued exploration. Claim the active one first.' }, { status: 409 })
+      }
+
+      // Queue this exploration
+      const { error } = await supabase
+        .from('exploration')
+        .insert({
+          character_id: characterId,
+          region: regionId,
+          started_at: new Date().toISOString(),
+          finish_at: new Date().toISOString(),
+          completed: false,
+          is_queued: true,
+        })
+
+      if (error) throw error
+
+      await supabase.from('game_logs').insert({
+        account_id: char.account_id,
+        character_id: characterId,
+        action: 'queue_exploration',
+        details: { region: regionId },
+      })
+
+      return NextResponse.json({ queued: true, region: regionId, message: 'Exploration queued! Will auto-start when current one finishes.' })
     }
 
     const { data: region } = await supabase
@@ -56,6 +89,7 @@ export async function POST(request: NextRequest) {
         started_at: now.toISOString(),
         finish_at: finishAt.toISOString(),
         completed: false,
+        is_queued: false,
       })
 
     if (error) throw error

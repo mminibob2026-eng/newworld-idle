@@ -82,7 +82,11 @@ export function ProfessionTab({
       notify(`Error: ${data.error}`)
       return
     }
-    notify(`Started ${available.find(p => p.id === professionId)?.name}! ETA: ${Math.floor(data.actualDuration)} min`)
+    if (data.queued) {
+      notify(data.message || `Queued! Will auto-start when current slot frees.`)
+    } else {
+      notify(`Started ${available.find(p => p.id === professionId)?.name}! ETA: ${Math.floor(data.actualDuration)} min`)
+    }
     onRefresh()
   }
 
@@ -116,13 +120,15 @@ export function ProfessionTab({
   if (loading) return <div style={{ color: '#888' }}>Loading professions...</div>
 
   const activeCount = professions.filter(p => p.is_active).length
+  const queuedCount = professions.filter(p => p.is_queued).length
 
   return (
     <div>
       <div className="panel-header">{category.toUpperCase()}</div>
       {activeCount > 0 && (
         <div style={{ color: '#888', fontSize: '10px', marginBottom: '6px' }}>
-          {activeCount} active session{activeCount > 1 ? 's' : ''} across all professions
+          {activeCount} active session{activeCount > 1 ? 's' : ''}
+          {queuedCount > 0 && ` | ${queuedCount} queued`}
         </div>
       )}
       {available.length === 0 && <div style={{ color: '#555', fontSize: '11px' }}>No professions available.</div>}
@@ -133,9 +139,28 @@ export function ProfessionTab({
           const profRewards = rewards[prof.id] || []
 
           return (
-            <div key={prof.id} className={`card ${learned?.is_active ? 'active pulsing' : ''} ${learned && !learned.is_active ? '' : ''}`}>
-              <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{prof.name}</div>
-              <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{prof.description}</div>
+            <div key={prof.id} className={`card ${learned?.is_active ? 'active pulsing' : ''} ${learned?.is_queued ? 'queued' : ''}`}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                {prof.icon_path ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={prof.icon_path} alt={prof.name}
+                    style={{ width: '32px', height: '32px', objectFit: 'cover', borderRadius: '2px', border: '1px solid var(--border)' }} />
+                ) : (
+                  <div style={{ width: '32px', height: '32px', background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: '12px' }}>
+                    ?
+                  </div>
+                )}
+                <div>
+                  <div style={{ color: '#0ff', fontSize: '12px', fontWeight: 'bold' }}>{prof.name}</div>
+                  <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>{prof.description}</div>
+                </div>
+              </div>
+
+              {learned?.is_queued && (
+                <div style={{ fontSize: '10px', marginTop: '4px', color: '#ff0' }}>
+                  ⏳ IN QUEUE — will auto-start when current finishes
+                </div>
+              )}
 
               {learned ? (
                 <>
@@ -156,7 +181,7 @@ export function ProfessionTab({
                         CLAIM
                       </button>
                     </div>
-                  ) : (
+                  ) : !learned.is_queued && (
                     <button style={{ fontSize: '10px', marginTop: '8px', width: '100%' }} onClick={() => startProfession(prof.id)}>
                       START (30min)
                     </button>

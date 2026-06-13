@@ -487,6 +487,7 @@ export type Database = {
           discoveries: Json
           finish_at: string
           id: string
+          is_queued: boolean
           region: string
           started_at: string
         }
@@ -497,6 +498,7 @@ export type Database = {
           discoveries?: Json
           finish_at: string
           id?: string
+          is_queued?: boolean
           region: string
           started_at: string
         }
@@ -507,6 +509,7 @@ export type Database = {
           discoveries?: Json
           finish_at?: string
           id?: string
+          is_queued?: boolean
           region?: string
           started_at?: string
         }
@@ -612,6 +615,7 @@ export type Database = {
           finish_at: string | null
           id: string
           is_active: boolean
+          is_queued: boolean
           level: number
           profession: string
           started_at: string | null
@@ -624,6 +628,7 @@ export type Database = {
           finish_at?: string | null
           id?: string
           is_active?: boolean
+          is_queued?: boolean
           level?: number
           profession: string
           started_at?: string | null
@@ -636,6 +641,7 @@ export type Database = {
           finish_at?: string | null
           id?: string
           is_active?: boolean
+          is_queued?: boolean
           level?: number
           profession?: string
           started_at?: string | null
