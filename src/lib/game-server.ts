@@ -257,6 +257,39 @@ export async function processOfflineProgress(characterId: string) {
         })
     }
 
+    // Auto-start queued exploration if exists
+    const { data: queuedExp } = await supabase
+      .from('exploration')
+      .select('*')
+      .eq('character_id', characterId)
+      .eq('is_queued', true)
+      .maybeSingle()
+
+    if (queuedExp) {
+      const dexSpeed = Math.max(0.5, 1 - char.dexterity * 0.005)
+      const { data: queuedRegion } = await supabase
+        .from('content_regions')
+        .select('exploration_base_time')
+        .eq('id', queuedExp.region)
+        .single()
+
+      if (queuedRegion) {
+        const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
+        const finalDur = Math.max(dur, 5)
+        const now = new Date()
+        const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
+
+        await supabase
+          .from('exploration')
+          .update({
+            is_queued: false,
+            started_at: now.toISOString(),
+            finish_at: finishAt.toISOString(),
+          })
+          .eq('id', queuedExp.id)
+      }
+    }
+
     results.push({
       type: 'exploration',
       name: region.name,

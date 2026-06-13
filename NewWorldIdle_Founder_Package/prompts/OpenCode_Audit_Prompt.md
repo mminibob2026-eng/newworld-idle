@@ -1,0 +1,1 @@
+Audit the game design, economy, retention, progression, and roadmap. Be brutally honest.

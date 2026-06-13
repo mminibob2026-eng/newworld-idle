@@ -91,6 +91,29 @@ export function DashboardTab({
     onRefresh()
   }
 
+  const [cancelConfirm, setCancelConfirm] = useState<{ type: 'profession' | 'exploration'; id: string; name: string } | null>(null)
+
+  const cancelActivity = async () => {
+    if (!cancelConfirm) return
+    playClick()
+    const endpoint = cancelConfirm.type === 'profession'
+      ? '/api/game/cancel-profession'
+      : '/api/game/cancel-exploration'
+    const body = cancelConfirm.type === 'profession'
+      ? { professionId: cancelConfirm.id, characterId: character.id }
+      : { explorationId: cancelConfirm.id, characterId: character.id }
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (!res.ok) { notify(`Error: ${data.error}`, 'error'); return }
+    notify(`${cancelConfirm.type === 'profession' ? 'Profession' : 'Exploration'} cancelled`, 'info')
+    setCancelConfirm(null)
+    onRefresh()
+  }
+
   const attrDefs = [
     { key: 'strength', label: 'STR', desc: '+2% Gathering Yield/point', effect: '+2% item quantity per action' },
     { key: 'dexterity', label: 'DEX', desc: '+1% Action Speed/point', effect: '-1% action time, +1% exploration speed' },
@@ -153,15 +176,14 @@ export function DashboardTab({
                 </span>
                 <span style={{ color: '#888', fontSize: '10px' }}>Lv.{prof.level}</span>
               </div>
-              <div style={{ color: '#ff0', fontSize: '11px', marginTop: '2px', fontFamily: 'monospace' }}>
+              <div style={{ color: '#ff0', fontSize: '12px', marginTop: '2px', fontFamily: 'monospace', fontWeight: 'bold' }}>
                 {prof.finish_at ? formatRemaining(new Date(prof.finish_at).getTime() - now) : ''}
               </div>
-              <div className="progress-bar" style={{ marginTop: '4px' }}>
-                <div className="progress-fill gold" style={{
-                  width: prof.finish_at
-                    ? `${Math.min(100, ((now - new Date(prof.started_at!).getTime()) / (new Date(prof.finish_at!).getTime() - new Date(prof.started_at!).getTime())) * 100)}%`
-                    : '0%'
-                }} />
+              <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                <button className="btn-danger" style={{ fontSize: '9px', padding: '4px 8px', flex: 1 }}
+                  onClick={() => setCancelConfirm({ type: 'profession', id: prof.profession, name: prof.profession })}>
+                  STOP
+                </button>
               </div>
             </div>
           </div>
@@ -177,15 +199,14 @@ export function DashboardTab({
                   Exploring {activeExp.region.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
                 </span>
               </div>
-              <div style={{ color: '#0ff', fontSize: '11px', marginTop: '2px', fontFamily: 'monospace' }}>
+              <div style={{ color: '#0ff', fontSize: '12px', marginTop: '2px', fontFamily: 'monospace', fontWeight: 'bold' }}>
                 {activeExp.finish_at ? formatRemaining(new Date(activeExp.finish_at).getTime() - now) : ''}
               </div>
-              <div className="progress-bar" style={{ marginTop: '4px' }}>
-                <div className="progress-fill" style={{
-                  width: activeExp.finish_at
-                    ? `${Math.min(100, ((now - new Date(activeExp.started_at!).getTime()) / (new Date(activeExp.finish_at!).getTime() - new Date(activeExp.started_at!).getTime())) * 100)}%`
-                    : '0%'
-                }} />
+              <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+                <button className="btn-danger" style={{ fontSize: '9px', padding: '4px 8px', flex: 1 }}
+                  onClick={() => setCancelConfirm({ type: 'exploration', id: activeExp.id, name: activeExp.region })}>
+                  STOP
+                </button>
               </div>
             </div>
           </div>
@@ -208,6 +229,37 @@ export function DashboardTab({
           </div>
         )}
       </div>
+
+      {/* Cancel Confirmation Dialog */}
+      {cancelConfirm && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'var(--bg-tertiary)', border: '1px solid var(--red)',
+            padding: '20px', maxWidth: '320px', width: '90%',
+            boxShadow: '0 0 30px rgba(255,0,0,0.2)',
+          }}>
+            <div style={{ color: '#f44', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px' }}>
+              ⚠️ Stop Activity?
+            </div>
+            <div style={{ color: '#ccc', fontSize: '11px', marginBottom: '16px' }}>
+              You will lose all progress on this {cancelConfirm.type}. 
+              <span style={{ color: '#f44' }}>This cannot be undone.</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn-danger" style={{ flex: 1 }} onClick={cancelActivity}>
+                YES, STOP
+              </button>
+              <button style={{ flex: 1 }} onClick={() => setCancelConfirm(null)}>
+                KEEP GOING
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Discoveries + Active Contracts */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

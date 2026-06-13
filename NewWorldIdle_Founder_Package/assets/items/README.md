@@ -1,0 +1,1 @@
+Store item icons here. Example: gold_ore.png, fish_salmon.png

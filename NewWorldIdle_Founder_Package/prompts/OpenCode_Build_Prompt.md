@@ -1,0 +1,1 @@
+Build New World Idle MVP using Next.js, Supabase, TypeScript, Tailwind, Vercel.

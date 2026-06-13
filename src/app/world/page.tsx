@@ -15,6 +15,7 @@ import { DiscoveriesTab } from '@/components/discoveries-tab'
 import { ProfessionsView } from '@/components/professions-view'
 import { CollectionView } from '@/components/collection-view'
 import { RewardFeed, useRewardFeed } from '@/components/reward-feedback'
+import { TutorialOverlay } from '@/components/tutorial-overlay'
 import { playReward, playLevelUp, playRare, initAudio } from '@/lib/sound'
 
 type Character = any
@@ -170,6 +171,7 @@ function WorldPage() {
       discoveries: discoveries.length > 0 ? discoveries : undefined,
     })
     notify(discoveries.length > 0 ? `Discovered ${discoveries.map((d: any) => d.name).join(', ')}` : 'Nothing special found.')
+    loadCharacter(character.id)
   }
 
   const showProfessionReward = (data: any, professionName: string) => {
@@ -241,6 +243,7 @@ function WorldPage() {
   return (
     <div className="world-container" style={{ maxWidth: '700px', margin: '0 auto', padding: '8px' }}>
       <RewardFeed rewards={rewards} />
+      <TutorialOverlay onComplete={() => {}} />
 
       {notification && (
         <div style={{
