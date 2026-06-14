@@ -53,35 +53,43 @@ export async function POST(request: NextRequest) {
         .eq('is_queued', true)
         .maybeSingle()
 
-      if (queued) {
-        const { data: queuedRegion } = await supabase
-          .from('content_regions')
-          .select('exploration_base_time')
-          .eq('id', queued.region)
-          .single()
+      if (!queued) {
+        return NextResponse.json({ error: 'No queued exploration found' }, { status: 404 })
+      }
 
-        if (queuedRegion) {
-          const { data: charData } = await supabase
-            .from('characters')
-            .select('dexterity')
-            .eq('id', characterId)
-            .single()
+      const { data: queuedRegion } = await supabase
+        .from('content_regions')
+        .select('exploration_base_time')
+        .eq('id', queued.region)
+        .single()
 
-          const dexSpeed = Math.max(0.5, 1 - (charData?.dexterity || 0) * 0.005)
-          const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
-          const finalDur = Math.max(dur, 5)
-          const now = new Date()
-          const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
+      if (!queuedRegion) {
+        return NextResponse.json({ error: 'Region not found for queued exploration' }, { status: 404 })
+      }
 
-          await supabase
-            .from('exploration')
-            .update({
-              is_queued: false,
-              started_at: now.toISOString(),
-              finish_at: finishAt.toISOString(),
-            })
-            .eq('id', queued.id)
-        }
+      const { data: charData } = await supabase
+        .from('characters')
+        .select('dexterity')
+        .eq('id', characterId)
+        .single()
+
+      const dexSpeed = Math.max(0.5, 1 - (charData?.dexterity || 0) * 0.005)
+      const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
+      const finalDur = Math.max(dur, 5)
+      const now = new Date()
+      const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
+
+      const { error: updateError } = await supabase
+        .from('exploration')
+        .update({
+          is_queued: false,
+          started_at: now.toISOString(),
+          finish_at: finishAt.toISOString(),
+        })
+        .eq('id', queued.id)
+
+      if (updateError) {
+        return NextResponse.json({ error: 'Failed to start queued exploration: ' + updateError.message }, { status: 500 })
       }
     }
 
