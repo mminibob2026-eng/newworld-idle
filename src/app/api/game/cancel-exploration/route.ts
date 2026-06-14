@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     if (exp.completed) {
       return NextResponse.json({ error: 'Already completed' }, { status: 400 })
     }
-    if (!exp.is_queued && !exp.finish_at) {
+    if (exp.is_queued === false && !exp.finish_at) {
       return NextResponse.json({ error: 'No active or queued exploration to cancel' }, { status: 400 })
     }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
       .delete()
       .eq('id', exp.id)
 
-    // If we canceled an active exploration, auto-start the queued one
+    // Auto-start queued exploration when cancelling active one
     if (wasActive) {
       const { data: queued } = await supabase
         .from('exploration')

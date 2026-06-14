@@ -63,7 +63,7 @@ export function ContractsTab({
       .single()
 
     if (char) {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = new Date().toLocaleDateString('en-CA')
       const resetDate = char.contracts_reset_date
       const completed = resetDate < today ? 0 : char.contracts_completed_today
       setDailyInfo({
@@ -142,7 +142,7 @@ export function ContractsTab({
   }
 
   const today = new Date()
-  const resetDateStr = dailyInfo?.resetDate || new Date().toISOString().slice(0, 10)
+  const resetDateStr = dailyInfo?.resetDate || today.toLocaleDateString('en-CA')
   const resetDate = new Date(resetDateStr + 'T23:59:59')
   const msUntilReset = resetDate.getTime() - today.getTime()
   const hoursToReset = Math.floor(msUntilReset / 3600000)

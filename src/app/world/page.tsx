@@ -172,7 +172,7 @@ function WorldPage() {
       setProfessions(profsRes.data ?? [])
 
       const [expRes, discRes] = await Promise.all([
-        (supabase as any).from('exploration').select('*').eq('character_id', id).eq('completed', false).order('created_at', { ascending: false }).limit(3),
+        (supabase as any).from('exploration').select('*').eq('character_id', id).eq('completed', false).order('created_at', { ascending: false }).limit(20),
         (supabase as any).from('player_discoveries').select('*, content_discoveries(*)').eq('account_id', char.account_id).order('discovered_at', { ascending: false }).limit(5),
       ])
       setExplorations(expRes.data ?? [])

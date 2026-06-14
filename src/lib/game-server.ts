@@ -694,7 +694,7 @@ export async function completeContract(contractId: string) {
     .eq('id', contract.character_id)
     .single()
   
-  const today = new Date().toISOString().slice(0, 10)
+  const today = new Date().toLocaleDateString('en-CA')
   let completedToday = freshChar?.contracts_completed_today ?? char.contracts_completed_today
   let resetDate = freshChar?.contracts_reset_date ?? char.contracts_reset_date
 
