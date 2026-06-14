@@ -36,11 +36,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No active or queued exploration to cancel' }, { status: 400 })
     }
 
-    // Delete the exploration row instead of marking as completed
+    const wasActive = !exp.is_queued && exp.finish_at
+
+    // Delete the exploration row
     await supabase
       .from('exploration')
       .delete()
       .eq('id', exp.id)
+
+    // If we canceled an active exploration, auto-start the queued one
+    if (wasActive) {
+      const { data: queued } = await supabase
+        .from('exploration')
+        .select('*')
+        .eq('character_id', characterId)
+        .eq('is_queued', true)
+        .maybeSingle()
+
+      if (queued) {
+        const { data: queuedRegion } = await supabase
+          .from('content_regions')
+          .select('exploration_base_time')
+          .eq('id', queued.region)
+          .single()
+
+        if (queuedRegion) {
+          const { data: charData } = await supabase
+            .from('characters')
+            .select('dexterity')
+            .eq('id', characterId)
+            .single()
+
+          const dexSpeed = Math.max(0.5, 1 - (charData?.dexterity || 0) * 0.005)
+          const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
+          const finalDur = Math.max(dur, 5)
+          const now = new Date()
+          const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
+
+          await supabase
+            .from('exploration')
+            .update({
+              is_queued: false,
+              started_at: now.toISOString(),
+              finish_at: finishAt.toISOString(),
+            })
+            .eq('id', queued.id)
+        }
+      }
+    }
 
     await supabase.from('game_logs').insert({
       account_id: char.account_id,

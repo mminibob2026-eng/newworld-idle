@@ -61,6 +61,15 @@ function WorldPage() {
     }
   }, [user, charId, loading, router])
 
+  // Periodic refresh every 30 seconds to keep activities up to date
+  useEffect(() => {
+    if (!character) return
+    const interval = setInterval(() => {
+      loadCharacter(character.id)
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [character?.id])
+
   const processOffline = async (id: string) => {
     try {
       const res = await fetch(`/api/game/process-offline?character_id=${id}`)
@@ -224,7 +233,7 @@ function WorldPage() {
     switch (activeTab) {
       case 'home': return <DashboardTab key="home" character={character} professions={professions} explorations={explorations} discoveries={discoveries} onRefresh={refresh} notify={notify} />
       case 'professions': return <ProfessionsView key="profs" characterId={character.id} accountId={character.account_id} professions={professions} onRefresh={refresh} notify={notify} showProfessionReward={(d, n) => showProfessionReward(d, n)} />
-      case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} />
+      case 'exploration': return <ExplorationTab key="explore" characterId={character.id} notify={notify} showReward={(d, n) => showExplorationReward(d, n)} onRefresh={refresh} />
       case 'contracts': return <ContractsTab key="contracts" characterId={character.id} storage={storage} notify={notify} onRefresh={refresh} />
       case 'collection': return <CollectionView key="collect" accountId={character.account_id} storage={storage} onRefresh={refresh} />
       case 'achievements': return <AchievementsTab key="achievements" accountId={character.account_id} />

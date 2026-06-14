@@ -4,6 +4,19 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { playClick, playReward } from '@/lib/sound'
 
+function formatRemaining(ms: number): string {
+  if (ms <= 0) return 'Ready!'
+  const totalSec = Math.floor(ms / 1000)
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  if (m >= 60) {
+    const h = Math.floor(m / 60)
+    const rm = m % 60
+    return `${h}h ${rm}m remaining`
+  }
+  return `${m}m ${s}s remaining`
+}
+
 type Region = any
 type Exploration = any
 
@@ -11,16 +24,24 @@ export function ExplorationTab({
   characterId,
   notify,
   showReward,
+  onRefresh,
 }: {
   characterId: string
   notify: (msg: string) => void
   showReward?: (data: any, regionName: string) => void
+  onRefresh?: () => void
 }) {
   const [regions, setRegions] = useState<Region[]>([])
   const [explorations, setExplorations] = useState<Exploration[]>([])
   const [loading, setLoading] = useState(true)
+  const [now, setNow] = useState(Date.now())
 
   useEffect(() => { loadData() }, [])
+
+  useEffect(() => {
+    const h = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(h)
+  }, [])
 
   const loadData = async () => {
     const supabase = createClient()
@@ -57,6 +78,7 @@ export function ExplorationTab({
       notify(`Exploring ${region.name}! ETA: ${data.actualDuration} min`)
     }
     loadData()
+    onRefresh?.()
   }
 
   const claimExploration = async (explorationId: string) => {
@@ -91,6 +113,24 @@ export function ExplorationTab({
       notify(`Next exploration auto-started!`)
     }
     loadData()
+    onRefresh?.()
+  }
+
+  const cancelExploration = async (explorationId: string) => {
+    playClick()
+    const res = await fetch('/api/game/cancel-exploration', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ explorationId, characterId }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      notify(`Error: ${data.error}`)
+      return
+    }
+    notify('Exploration cancelled')
+    loadData()
+    onRefresh?.()
   }
 
   if (loading) return (
@@ -132,16 +172,28 @@ export function ExplorationTab({
                     <span className="exploring-badge" style={{ marginLeft: '6px' }}>IN PROGRESS</span>
                   </div>
                 </div>
-                <div className="progress-bar" style={{ marginTop: '6px' }}>
-                  <div className="progress-fill gold" style={{ width: `${pct}%` }} />
-                </div>
+              <div className="progress-bar" style={{ marginTop: '6px' }}>
+                <div className="progress-fill gold" style={{ width: `${pct}%` }} />
+              </div>
+              <div style={{ color: '#0ff', fontSize: '11px', marginTop: '4px', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                {exp.finish_at ? formatRemaining(new Date(exp.finish_at).getTime() - now) : ''}
+              </div>
+              <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
                 <button
-                  style={{ fontSize: '10px', marginTop: '6px', width: '100%' }}
+                  style={{ fontSize: '10px', flex: 1 }}
                   disabled={new Date(exp.finish_at!) > new Date()}
                   onClick={() => claimExploration(exp.id)}
                 >
                   {new Date(exp.finish_at!) > new Date() ? 'IN PROGRESS...' : 'CLAIM'}
                 </button>
+                <button
+                  className="btn-danger"
+                  style={{ fontSize: '10px', flex: '0 0 auto', padding: '4px 8px' }}
+                  onClick={() => cancelExploration(exp.id)}
+                >
+                  STOP
+                </button>
+              </div>
               </div>
             )
           })}
@@ -150,12 +202,25 @@ export function ExplorationTab({
 
       {queuedExps.length > 0 && (
         <div style={{ marginBottom: '12px', padding: '8px', border: '1px solid #333', borderRadius: '2px', background: 'var(--bg-secondary)' }}>
-          <div style={{ color: '#ff0', fontSize: '10px' }}>
-            ⏳ Queued: {queuedExps.map(e => regions.find(r => r.id === e.region)?.name || e.region).join(', ')}
-          </div>
-          <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>
-            Will auto-start when active exploration completes.
-          </div>
+          {queuedExps.map(qe => (
+            <div key={qe.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div>
+                <div style={{ color: '#ff0', fontSize: '10px' }}>
+                  ⏳ Queued: {regions.find(r => r.id === qe.region)?.name || qe.region}
+                </div>
+                <div style={{ color: '#555', fontSize: '9px', marginTop: '2px' }}>
+                  Will auto-start when active exploration completes.
+                </div>
+              </div>
+              <button
+                className="btn-danger"
+                style={{ fontSize: '9px', padding: '4px 8px', flex: '0 0 auto' }}
+                onClick={() => cancelExploration(qe.id)}
+              >
+                CANCEL
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
