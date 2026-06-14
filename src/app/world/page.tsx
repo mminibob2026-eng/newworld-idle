@@ -247,7 +247,7 @@ function WorldPage() {
       case 'specialization': return <SpecializationTab key="specialization" character={character} onRefresh={refresh} />
       default: return null
     }
-  }, [activeTab, character, professions, storage, refresh, notify])
+  }, [activeTab, character, professions, explorations, discoveries, storage, refresh, notify])
 
   if (loading || loadingChar || !character) {
     return (

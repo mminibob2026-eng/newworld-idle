@@ -733,13 +733,25 @@ export async function completeContract(contractId: string) {
     .update({ quantity: storageItem.quantity - contract.requirement_qty })
     .eq('id', storageItem.id)
 
+  // Re-read latest character data right before writing to avoid race conditions
+  const { data: latestChar } = await supabase
+    .from('characters')
+    .select('contracts_completed_today, contracts_reset_date, gold, knowledge')
+    .eq('id', contract.character_id)
+    .single()
+
+  const latestCompleted = latestChar?.contracts_completed_today ?? completedToday
+  const latestReset = latestChar?.contracts_reset_date ?? resetDate
+  const effectiveCompleted = latestReset < today ? 0 : latestCompleted
+  const effectiveReset = latestReset < today ? today : latestReset
+
   await supabase
     .from('characters')
     .update({
-      gold: char.gold + goldReward,
-      knowledge: char.knowledge + kpReward,
-      contracts_completed_today: completedToday + 1,
-      contracts_reset_date: resetDate,
+      gold: (latestChar?.gold || char.gold) + goldReward,
+      knowledge: (latestChar?.knowledge || char.knowledge) + kpReward,
+      contracts_completed_today: effectiveCompleted + 1,
+      contracts_reset_date: effectiveReset,
     })
     .eq('id', contract.character_id)
 
