@@ -70,6 +70,13 @@ function WorldPage() {
     return () => clearInterval(interval)
   }, [character?.id])
 
+  // Refresh data when switching tabs to ensure activities are up to date
+  useEffect(() => {
+    if (character) {
+      loadCharacter(character.id)
+    }
+  }, [activeTab])
+
   const processOffline = async (id: string) => {
     try {
       const res = await fetch(`/api/game/process-offline?character_id=${id}`)
