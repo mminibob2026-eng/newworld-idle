@@ -94,36 +94,29 @@ export default function Dashboard() {
   }
 
   const deleteCharacter = async (id: string) => {
-    const supabase = createClient()
-
-    // Check if this is the last character
-    const isLastCharacter = characters.length <= 1
-
-    // Delete character-level data
-    await (supabase as any).from('professions').delete().eq('character_id', id)
-    await (supabase as any).from('exploration').delete().eq('character_id', id)
-    await (supabase as any).from('contracts').delete().eq('character_id', id)
-    await (supabase as any).from('character_inventory').delete().eq('character_id', id)
-    await (supabase as any).from('research').delete().eq('character_id', id)
-    await (supabase as any).from('game_logs').delete().eq('character_id', id)
-    await (supabase as any).from('characters').delete().eq('id', id)
-
-    // If last character, also clear account-level data
-    if (isLastCharacter) {
-      await (supabase as any).from('storage').delete().eq('account_id', user!.id)
-      await (supabase as any).from('player_discoveries').delete().eq('account_id', user!.id)
-      await (supabase as any).from('player_achievements').delete().eq('account_id', user!.id)
-      await (supabase as any).from('achievement_counters').delete().eq('account_id', user!.id)
-    }
-
-    // Remove tutorial completion for this character
     try {
-      const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
-      const charId = id
-      const updated = completedChars.filter((completedId: string) => completedId !== charId)
-      localStorage.setItem('nw-tutorial-chars', JSON.stringify(updated))
-    } catch {
-      // Ignore localStorage errors
+      const res = await fetch('/api/game/delete-character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterId: id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`Error: ${data.error}`)
+        return
+      }
+
+      if (data.wasLastCharacter) {
+        localStorage.removeItem('nw-tutorial-chars')
+      } else {
+        try {
+          const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
+          const updated = completedChars.filter((completedId: string) => completedId !== id)
+          localStorage.setItem('nw-tutorial-chars', JSON.stringify(updated))
+        } catch { }
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`)
     }
 
     setDeleteConfirm(null)
