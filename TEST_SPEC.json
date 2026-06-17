@@ -1,0 +1,388 @@
+{
+  "meta": {
+    "name": "New World Idle - Test Specification",
+    "version": "1.0.0",
+    "game_url": "https://newworld-zeta.vercel.app",
+    "debug_api": "/api/debug/export",
+    "test_account": {
+      "email": "TEST_EMAIL@example.com",
+      "password": "TEST_PASSWORD"
+    }
+  },
+
+  "features": {
+    "character_creation": {
+      "tests": [
+        {
+          "id": "CHAR-001",
+          "name": "Create 4 characters",
+          "steps": [
+            "Login to game",
+            "Navigate to dashboard",
+            "Click + to create character",
+            "Enter name 'TestChar1'",
+            "Click CREATE",
+            "Repeat for TestChar2, TestChar3, TestChar4"
+          ],
+          "expected": "All 4 characters created, slot count shows 4/4"
+        },
+        {
+          "id": "CHAR-002",
+          "name": "Block 5th character",
+          "steps": [
+            "With 4 characters existing",
+            "Click + to create 5th character",
+            "Enter name 'TestChar5'"
+          ],
+          "expected": "Error 'Maximum 4 characters per account', no 5th character created"
+        },
+        {
+          "id": "CHAR-003",
+          "name": "Delete non-last character",
+          "steps": [
+            "Select TestChar1",
+            "Click DELETE button",
+            "Verify confirmation dialog with name 'TestChar1'",
+            "Verify bulleted list of deleted data",
+            "Verify NOTE about shared storage preserved",
+            "Click CANCEL",
+            "Verify character still exists",
+            "Click DELETE again",
+            "Click YES, DELETE"
+          ],
+          "expected": "Character deleted, other 3 characters intact, storage preserved"
+        },
+        {
+          "id": "CHAR-004",
+          "name": "Delete last character",
+          "steps": [
+            "Delete remaining 3 characters",
+            "On last character, click DELETE",
+            "Verify WARNING about account data erasure",
+            "Confirm deletion"
+          ],
+          "expected": "Character and all account data deleted (storage, discoveries, achievements)"
+        },
+        {
+          "id": "CHAR-005",
+          "name": "Recreate character after deletion",
+          "steps": [
+            "Create new character 'RecreatedChar'",
+            "Verify character in list",
+            "Verify slot count 1/4",
+            "Verify no items/progress"
+          ],
+          "expected": "Fresh character created with no prior data"
+        }
+      ]
+    },
+
+    "offline_progress": {
+      "tests": [
+        {
+          "id": "OFFLINE-001",
+          "name": "1 minute offline progress",
+          "setup": {
+            "start_activity": "profession",
+            "duration_minutes": 1
+          },
+          "steps": [
+            "Start woodcutting profession",
+            "Note start time",
+            "Set last_active_at to 1 minute ago (via debug API or wait)",
+            "Login/refresh"
+          ],
+          "expected": "Offline progress calculated, profession progressed"
+        },
+        {
+          "id": "OFFLINE-002",
+          "name": "1 hour offline progress",
+          "setup": {
+            "start_activity": "profession_and_exploration",
+            "duration_minutes": 60
+          },
+          "steps": [
+            "Start woodcutting (30min)",
+            "Start exploration",
+            "Set last_active_at to 1 hour ago",
+            "Login"
+          ],
+          "expected": "Offline popup shows, gold/XP earned, activities completed, END bonus applied"
+        },
+        {
+          "id": "OFFLINE-003",
+          "name": "24 hours offline progress",
+          "setup": {
+            "duration_minutes": 1440
+          },
+          "steps": [
+            "Start multiple activities",
+            "Set last_active_at to 24 hours ago",
+            "Login"
+          ],
+          "expected": "Offline popup shows, multiple activities completed, gold earned (capped)"
+        },
+        {
+          "id": "OFFLINE-004",
+          "name": "Bob Pass 48 hours offline",
+          "setup": {
+            "bob_pass_active": true,
+            "duration_minutes": 2880
+          },
+          "steps": [
+            "With Bob Pass (or simulate extended cap)",
+            "Start activities",
+            "Set last_active_at to 48 hours ago",
+            "Login"
+          ],
+          "expected": "Extended offline cap applied, Bob Pass bonus active"
+        }
+      ]
+    },
+
+    "professions": {
+      "tests": [
+        {
+          "id": "PROF-001",
+          "name": "Start gathering profession",
+          "steps": [
+            "Go to Professions tab",
+            "Select Woodcutting",
+            "Click START"
+          ],
+          "expected": "Activity starts, countdown shows 30:00"
+        },
+        {
+          "id": "PROF-002",
+          "name": "Queue profession in different category",
+          "steps": [
+            "Start Woodcutting (gathering)",
+            "Start Cooking (production)",
+            "Cooking should queue"
+          ],
+          "expected": "Woodcutting active, Cooking queued"
+        },
+        {
+          "id": "PROF-003",
+          "name": "Cancel active profession auto-starts queued",
+          "steps": [
+            "Start Woodcutting",
+            "Queue Cooking",
+            "Click STOP on Woodcutting",
+            "Confirm cancellation"
+          ],
+          "expected": "Woodcutting cancelled, Cooking auto-starts"
+        },
+        {
+          "id": "PROF-004",
+          "name": "Claim profession rewards",
+          "steps": [
+            "Wait for profession to complete",
+            "Click CLAIM"
+          ],
+          "expected": "Gold/XP granted, level up if applicable, queued profession starts"
+        }
+      ]
+    },
+
+    "exploration": {
+      "tests": [
+        {
+          "id": "EXPLORE-001",
+          "name": "Start exploration",
+          "steps": [
+            "Go to Explore tab",
+            "Select Starter Town",
+            "Click EXPLORE"
+          ],
+          "expected": "Exploration starts, countdown shows"
+        },
+        {
+          "id": "EXPLORE-002",
+          "name": "Queue second exploration",
+          "steps": [
+            "Start exploration",
+            "Start another exploration",
+            "Second should queue"
+          ],
+          "expected": "Active exploration running, 2nd queued"
+        },
+        {
+          "id": "EXPLORE-003",
+          "name": "Cancel active exploration auto-starts queued",
+          "steps": [
+            "Start exploration A",
+            "Queue exploration B",
+            "Cancel A"
+          ],
+          "expected": "A cancelled, B auto-starts"
+        },
+        {
+          "id": "EXPLORE-004",
+          "name": "Complete exploration claim",
+          "steps": [
+            "Wait for exploration",
+            "Click CLAIM"
+          ],
+          "expected": "Gold reward, discoveries (if any)"
+        }
+      ]
+    },
+
+    "contracts": {
+      "tests": [
+        {
+          "id": "CONTRACT-001",
+          "name": "Generate contracts",
+          "steps": [
+            "Go to Contracts tab",
+            "Click GENERATE",
+            "Note gold cost"
+          ],
+          "expected": "3 contracts generated, 25g deducted"
+        },
+        {
+          "id": "CONTRACT-002",
+          "name": "Complete contract",
+          "precondition": "Have required items in storage",
+          "steps": [
+            "Click COMPLETE on contract"
+          ],
+          "expected": "Items deducted, gold+KP rewarded, daily count +1"
+        },
+        {
+          "id": "CONTRACT-003",
+          "name": "Contract daily limit",
+          "steps": [
+            "Complete 12 contracts"
+          ],
+          "expected": "13th shows error 'Daily limit reached', timer shows reset"
+        },
+        {
+          "id": "CONTRACT-004",
+          "name": "Contract reset timer correct",
+          "steps": [
+            "Complete some contracts",
+            "Check timer to reset"
+          ],
+          "expected": "Timer shows hours until midnight local time, not 30+ hours"
+        }
+      ]
+    },
+
+    "storage": {
+      "tests": [
+        {
+          "id": "STORAGE-001",
+          "name": "Deposit item",
+          "steps": [
+            "Gather resources",
+            "Check storage"
+          ],
+          "expected": "Items appear in storage"
+        },
+        {
+          "id": "STORAGE-002",
+          "name": "Switch character shares storage",
+          "steps": [
+            "Character A gathers wood",
+            "Switch to Character B",
+            "Check storage"
+          ],
+          "expected": "Character B sees same wood in shared storage"
+        }
+      ]
+    },
+
+    "achievements": {
+      "tests": [
+        {
+          "id": "ACH-001",
+          "name": "Claim achievement",
+          "precondition": "Achievement requirements met",
+          "steps": [
+            "Go to Achievements",
+            "Click CLAIM on available"
+          ],
+          "expected": "Bob Coins granted, marked as claimed"
+        }
+      ]
+    },
+
+    "ui_countdowns": {
+      "tests": [
+        {
+          "id": "UI-001",
+          "name": "Home tab countdowns",
+          "steps": [
+            "Start profession",
+            "Go to Home tab",
+            "Note countdown"
+          ],
+          "expected": "Countdown shows, updates every second"
+        },
+        {
+          "id": "UI-002",
+          "name": "Profession tab countdowns",
+          "steps": [
+            "Start profession",
+            "Stay on Profession tab",
+            "Note countdown"
+          ],
+          "expected": "Countdown shows, updates every second"
+        },
+        {
+          "id": "UI-003",
+          "name": "Exploration tab countdowns",
+          "steps": [
+            "Start exploration",
+            "Stay on Explore tab",
+            "Note countdown"
+          ],
+          "expected": "Countdown shows, updates every second"
+        }
+      ]
+    },
+
+    "cancel_confirmation": {
+      "tests": [
+        {
+          "id": "CANCEL-001",
+          "name": "Cancel profession confirmation",
+          "steps": [
+            "Start profession",
+            "Click STOP",
+            "Verify dialog appears",
+            "Verify profession name shown",
+            "Click CANCEL",
+            "Click STOP again",
+            "Click YES"
+          ],
+          "expected": "Cancel dismisses dialog, YES cancels and refreshes"
+        }
+      ]
+    }
+  },
+
+  "test_data": {
+    "characters": [
+      { "name": "TestChar1", "attributes": { "STR": 10, "DEX": 10, "INT": 10, "END": 10, "LCK": 10, "CHA": 10 } },
+      { "name": "TestChar2", "attributes": { "STR": 15, "DEX": 5, "INT": 5, "END": 5, "LCK": 5, "CHA": 5 } },
+      { "name": "TestChar3", "attributes": { "STR": 5, "DEX": 15, "INT": 5, "END": 5, "LCK": 5, "CHA": 5 } },
+      { "name": "TestChar4", "attributes": { "STR": 5, "DEX": 5, "INT": 15, "END": 5, "LCK": 5, "CHA": 5 } }
+    ],
+    "regions": ["starter_town", "whispering_woods", "crystal_coast"],
+    "professions": {
+      "gathering": ["woodcutting", "mining", "fishing", "farming"],
+      "production": ["crafting", "cooking", "alchemy"]
+    }
+  },
+
+  "assertions": {
+    "character_limit": "characters.length <= 4",
+    "offline_cap_notes": "24h cap standard, 48h with Bob Pass",
+    "contract_daily_max": 12,
+    "queue_max_per_category": 2,
+    "attributes_max_per_char": 100
+  }
+}
