@@ -77,6 +77,18 @@ function WorldPage() {
     }
   }, [activeTab])
 
+  // Refresh data when page becomes visible (e.g., returning from Dashboard)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && character) {
+        loadCharacter(character.id)
+        processOffline(character.id)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [character?.id])
+
   const processOffline = async (id: string) => {
     try {
       const res = await fetch(`/api/game/process-offline?character_id=${id}`)
