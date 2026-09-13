@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useAuth } from '@/components/auth-provider'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import { useTranslation } from '@/lib/i18n'
 
 export default function Home() {
   const { user, loading, signIn, signUp, signInWithGoogle } = useAuth()
+  const { t } = useTranslation()
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +24,7 @@ export default function Home() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
         <div className="loading-spinner large" />
-        <span style={{ color: '#0ff', fontSize: '11px' }}>LOADING...</span>
+        <span style={{ color: '#0ff', fontSize: '11px' }}>{t.common.loading}</span>
       </div>
     )
   }
@@ -50,17 +52,17 @@ export default function Home() {
       <div className="panel" style={{ maxWidth: '360px', width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <h1 style={{ color: '#0ff', fontSize: '22px', margin: '0 0 4px', letterSpacing: '3px' }}>
-            NEW WORLD IDLE
+            {t.appName}
           </h1>
           <p style={{ color: '#888', fontSize: '11px', margin: 0 }}>
-            Build Your Own Path
+            {t.appTagline}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {isSignUp && (
             <input
-              placeholder="Username"
+              placeholder={t.username}
               value={username}
               onChange={e => setUsername(e.target.value)}
               maxLength={20}
@@ -69,21 +71,21 @@ export default function Home() {
           )}
           <input
             type="email"
-            placeholder="Email"
+            placeholder={t.email}
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t.password}
             value={password}
             onChange={e => setPassword(e.target.value)}
             minLength={6}
             required
           />
           <button type="submit" style={{ marginTop: '4px' }}>
-            {isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN'}
+            {isSignUp ? t.signUp : t.signIn}
           </button>
         </form>
 
@@ -95,18 +97,18 @@ export default function Home() {
           onClick={signInWithGoogle}
           style={{ width: '100%', borderColor: '#888', color: '#ccc', background: 'rgba(255,255,255,0.05)' }}
         >
-          SIGN IN WITH GOOGLE
+          {t.loginWithGoogle}
         </button>
 
         {error && <p style={{ color: '#f44', fontSize: '11px', margin: '4px 0 0' }}>{error}</p>}
 
         <p style={{ textAlign: 'center', margin: '12px 0 0', fontSize: '11px', color: '#888' }}>
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+          {isSignUp ? t.hasAccount : t.noAccount}{' '}
           <button
             onClick={() => { setIsSignUp(!isSignUp); setError('') }}
             style={{ background: 'none', border: 'none', color: '#0ff', padding: 0, fontSize: '11px', textDecoration: 'underline' }}
           >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
+            {isSignUp ? t.signIn : t.signUp}
           </button>
         </p>
       </div>

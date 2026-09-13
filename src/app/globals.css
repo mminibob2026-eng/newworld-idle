@@ -444,6 +444,99 @@ html, body {
   white-space: nowrap;
 }
 
+/* Top bar */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Energy bar */
+.energy-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+.energy-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.energy-bar-value {
+  color: var(--accent);
+  font-weight: bold;
+}
+.energy-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.energy-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s ease;
+  border-radius: 3px;
+}
+.energy-bar-fill.low {
+  background: var(--red);
+}
+.energy-bar-fill.full {
+  background: var(--green);
+  animation: energyPulse 2s ease infinite;
+}
+.energy-bar-recovery {
+  font-size: 8px;
+  color: var(--text-dim);
+}
+@keyframes energyPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+/* Tab content area */
+.tab-content {
+  padding: 12px;
+}
+
+/* Button variants */
+.btn-sm {
+  font-size: 11px;
+  padding: 6px 10px;
+  min-height: 32px;
+  min-width: 32px;
+}
+.btn-active {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+.btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Spinner */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spinner 0.8s linear infinite;
+}
+
+/* Progress bar red/yellow variants */
+.progress-fill.bg-red-500 { background: var(--red); }
+.progress-fill.bg-yellow-500 { background: var(--yellow); }
+
 /* One-hand bottom nav (for actual fixed bottom navigation) */
 @media (max-width: 430px) {
   .bottom-nav {

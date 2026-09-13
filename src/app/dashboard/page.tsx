@@ -4,21 +4,28 @@ import { useAuth } from '@/components/auth-provider'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useTranslation } from '@/lib/i18n'
+import { ORIGINS } from '@/lib/game-data'
+import { IntroStory } from '@/components/intro-story'
 
 type Character = any
 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth()
+  const { t, locale } = useTranslation()
   const router = useRouter()
   const [characters, setCharacters] = useState<Character[]>([])
   const [loadingChars, setLoadingChars] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
+  const [selectedOrigin, setSelectedOrigin] = useState<string>('middle')
   const [error, setError] = useState('')
   const [fatalError, setFatalError] = useState('')
-  const [bobCoins, setBobCoins] = useState(0)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [deleteConfirmName, setDeleteConfirmName] = useState<string>('')
+  const [showIntro, setShowIntro] = useState(false)
+  const [introCharName, setIntroCharName] = useState('')
+  const [introOriginName, setIntroOriginName] = useState('')
 
   useEffect(() => {
     if (!user && !loading) router.push('/')
@@ -27,24 +34,13 @@ export default function Dashboard() {
         setFatalError(e?.message || String(e))
         setLoadingChars(false)
       })
-      loadProfile()
     }
   }, [user, loading, router])
 
-  const loadProfile = async () => {
-    const supabase = createClient()
-    const { data } = await (supabase as any)
-      .from('profiles')
-      .select('bob_coins')
-      .eq('id', user!.id)
-      .single()
-    if (data) setBobCoins(data.bob_coins || 0)
-  }
-
   const loadCharacters = async () => {
     const supabase = createClient()
-    const { data, error } = await supabase
-      .from('characters')
+    const { data, error } = await (supabase as any)
+      .from('new_characters')
       .select('*')
       .eq('account_id', user!.id)
       .order('created_at', { ascending: true })
@@ -57,10 +53,9 @@ export default function Dashboard() {
     setError('')
     if (!newName.trim()) return
     const supabase = createClient()
-    
-    // Use a server-side transaction or check to prevent race conditions
-    const { data: existingChars } = await supabase
-      .from('characters')
+
+    const { data: existingChars } = await (supabase as any)
+      .from('new_characters')
       .select('id')
       .eq('account_id', user!.id)
 
@@ -69,54 +64,112 @@ export default function Dashboard() {
       return
     }
 
-    const { error: err } = await supabase
-      .from('characters')
-      .insert({ account_id: user!.id, name: newName.trim() } as any)
+    const { error: err } = await (supabase as any)
+      .from('new_characters')
+      .insert({
+        account_id: user!.id,
+        name: newName.trim(),
+        origin_id: selectedOrigin,
+        energy: 100,
+        energy_max: 100,
+        level: 1,
+        gold: 100,
+        strength: 10,
+        dexterity: 10,
+        intelligence: 10,
+        endurance: 10,
+        luck: 10,
+        charisma: 10,
+        stress: 0,
+        fatigue: 0,
+      })
 
     if (err) {
       setError(err.message)
       return
     }
 
-    try {
-      await (supabase as any).rpc('increment_counter', {
-        p_account_id: user!.id,
-        p_key: 'create_character',
-        p_amount: 1,
-      })
-    } catch {
-      // Counter not critical
+    // Create parents for non-orphan origins
+    if (selectedOrigin !== 'orphan') {
+      const { generateNPCName, PARENT_OCCUPATIONS, PARENT_PERSONALITIES } = await import('@/lib/game-data')
+
+      // Get the newly created character
+      const { data: newChar } = await (supabase as any)
+        .from('new_characters')
+        .select('id')
+        .eq('account_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (newChar) {
+        const wealthTier = selectedOrigin === 'wealthy' ? 'high' : selectedOrigin === 'humble' ? 'low' : 'medium'
+        const availableOccupations = PARENT_OCCUPATIONS.filter(o =>
+          wealthTier === 'high' ? true :
+          wealthTier === 'medium' ? o.wealth !== 'high' :
+          o.wealth === 'low'
+        )
+
+        const fatherOcc = availableOccupations[Math.floor(Math.random() * availableOccupations.length)]
+        const fatherPersonality = PARENT_PERSONALITIES[Math.floor(Math.random() * PARENT_PERSONALITIES.length)]
+        const fatherName = generateNPCName('zh')
+        const fatherAge = 25 + Math.floor(Math.random() * 15)
+
+        const motherOcc = availableOccupations[Math.floor(Math.random() * availableOccupations.length)]
+        const motherPersonality = PARENT_PERSONALITIES[Math.floor(Math.random() * PARENT_PERSONALITIES.length)]
+        const motherName = generateNPCName('zh')
+        const motherAge = 22 + Math.floor(Math.random() * 12)
+
+        await (supabase as any).from('character_parents').insert([
+          {
+            character_id: newChar.id,
+            npc_name: fatherName,
+            relationship: 'father',
+            occupation: fatherOcc.id,
+            personality: fatherPersonality.id,
+            age_at_birth: fatherAge,
+            current_age: fatherAge,
+            loyalty: 60 + Math.floor(Math.random() * 30),
+            alive: true,
+          },
+          {
+            character_id: newChar.id,
+            npc_name: motherName,
+            relationship: 'mother',
+            occupation: motherOcc.id,
+            personality: motherPersonality.id,
+            age_at_birth: motherAge,
+            current_age: motherAge,
+            loyalty: 70 + Math.floor(Math.random() * 25),
+            alive: true,
+          },
+        ])
+      }
     }
 
     setNewName('')
+    setSelectedOrigin('middle')
     setShowCreate(false)
+
+    // Show intro story for new character
+    const origin = ORIGINS.find(o => o.id === selectedOrigin)
+    setIntroCharName(newName.trim())
+    setIntroOriginName(locale === 'zh' ? origin?.name_zh || '' : origin?.name_en || '')
+    setShowIntro(true)
+
     loadCharacters()
   }
 
   const deleteCharacter = async (id: string) => {
-    try {
-      const res = await fetch('/api/game/delete-character', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ characterId: id }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        alert(`Error: ${data.error}`)
-        return
-      }
+    const supabase = createClient()
+    const { error } = await (supabase as any)
+      .from('new_characters')
+      .delete()
+      .eq('id', id)
 
-      if (data.wasLastCharacter) {
-        localStorage.removeItem('nw-tutorial-chars')
-      } else {
-        try {
-          const completedChars = JSON.parse(localStorage.getItem('nw-tutorial-chars') || '[]')
-          const updated = completedChars.filter((completedId: string) => completedId !== id)
-          localStorage.setItem('nw-tutorial-chars', JSON.stringify(updated))
-        } catch { }
-      }
-    } catch (err: any) {
-      alert(`Error: ${err.message}`)
+    if (error) {
+      alert(`Error: ${error.message}`)
+      return
     }
 
     setDeleteConfirm(null)
@@ -128,7 +181,7 @@ export default function Dashboard() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: '16px' }}>
         <div className="loading-spinner large" />
-        <span style={{ color: '#0ff', fontSize: '11px' }}>LOADING...</span>
+        <span style={{ color: '#0ff', fontSize: '11px' }}>{t.common.loading}</span>
       </div>
     )
   }
@@ -137,9 +190,9 @@ export default function Dashboard() {
     return (
       <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px' }}>
         <div className="panel">
-          <div className="panel-header" style={{ color: '#f44' }}>ERROR</div>
+          <div className="panel-header" style={{ color: '#f44' }}>{t.common.error}</div>
           <pre style={{ color: '#f44', fontSize: '11px', whiteSpace: 'pre-wrap' }}>{fatalError}</pre>
-          <button onClick={() => router.push('/')} style={{ marginTop: '12px' }}>← BACK TO LOGIN</button>
+          <button onClick={() => router.push('/')} style={{ marginTop: '12px' }}>{t.common.back}</button>
         </div>
       </div>
     )
@@ -149,12 +202,12 @@ export default function Dashboard() {
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h1 style={{ color: '#0ff', fontSize: '16px', letterSpacing: '2px', margin: 0 }}>
-          NEW WORLD IDLE
+          {t.appName}
         </h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span style={{ color: '#888', fontSize: '11px' }}>{user?.email}</span>
           <button onClick={signOut} className="btn-danger">
-            LOGOUT
+            {t.signOut}
           </button>
         </div>
       </div>
@@ -162,7 +215,7 @@ export default function Dashboard() {
       <div className="panel" style={{ marginBottom: '16px' }}>
         <div className="panel-header">SELECT CHARACTER</div>
         <p style={{ color: '#888', fontSize: '11px', marginBottom: '12px' }}>
-          Choose a character to enter the world. {characters.length}/4 slots used.
+          {characters.length}/4 slots used.
         </p>
 
         <div className="feature-grid">
@@ -170,16 +223,19 @@ export default function Dashboard() {
             <div
               key={char.id}
               className="card"
-              onClick={() => router.push(`/world?char=${char.id}`)}
+              onClick={() => router.push('/world')}
             >
               <div style={{ color: '#0ff', fontWeight: 'bold', fontSize: '13px' }}>{char.name}</div>
               <div style={{ color: '#888', fontSize: '10px', marginTop: '4px' }}>
-                Lv.{char.level} | {char.region.replace('_', ' ')}
+                Lv.{char.level} | {ORIGINS.find(o => o.id === char.origin_id)?.[`name_${locale}` as keyof typeof ORIGINS[0]] || char.origin_id}
               </div>
               <div style={{ display: 'flex', gap: '6px', marginTop: '6px', fontSize: '10px' }}>
                 <span style={{ color: '#888' }}>STR {char.strength}</span>
                 <span style={{ color: '#888' }}>DEX {char.dexterity}</span>
                 <span style={{ color: '#888' }}>INT {char.intelligence}</span>
+              </div>
+              <div style={{ fontSize: '10px', color: '#888', marginTop: '4px' }}>
+                Day {char.days_lived} | {char.highest_education || 'No education'}
               </div>
               <button
                 className="btn-danger"
@@ -207,32 +263,51 @@ export default function Dashboard() {
         </div>
 
         {showCreate && (
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+          <div style={{ marginTop: '12px' }}>
             <input
               placeholder="Character name..."
               value={newName}
               onChange={e => setNewName(e.target.value)}
               maxLength={20}
-              style={{ flex: 1 }}
+              style={{ width: '100%', marginBottom: '8px' }}
               onKeyDown={e => e.key === 'Enter' && createCharacter()}
             />
-            <button onClick={createCharacter} className="btn-green">CREATE</button>
-            <button onClick={() => setShowCreate(false)} className="btn-danger">CANCEL</button>
+
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>{t.settings.chooseOrigin}:</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                {ORIGINS.map(origin => (
+                  <div
+                    key={origin.id}
+                    className={`card ${selectedOrigin === origin.id ? 'active' : ''}`}
+                    onClick={() => setSelectedOrigin(origin.id)}
+                    style={{ cursor: 'pointer', padding: '8px' }}
+                  >
+                    <div style={{ fontWeight: 'bold', fontSize: '12px' }}>
+                      {locale === 'zh' ? origin.name_zh : origin.name_en}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#888', marginTop: '2px' }}>
+                      {locale === 'zh' ? origin.advantage_zh : origin.advantage_en}
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#f44', marginTop: '2px' }}>
+                      {locale === 'zh' ? origin.struggle_zh : origin.struggle_en}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={createCharacter} className="btn-green" style={{ flex: 1 }}>CREATE</button>
+              <button onClick={() => { setShowCreate(false); setNewName(''); setSelectedOrigin('middle') }} className="btn-danger" style={{ flex: 1 }}>CANCEL</button>
+            </div>
           </div>
         )}
 
         {error && <p style={{ color: '#f44', fontSize: '11px', marginTop: '8px' }}>{error}</p>}
       </div>
 
-      <div className="panel" style={{ marginBottom: '16px' }}>
-        <div className="panel-header">ACCOUNT</div>
-        <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: '#888' }}>
-          <span>Bob Coins: <span style={{ color: '#ff0' }}>{bobCoins}</span></span>
-          <span>Bob Pass: <span style={{ color: '#888' }}>Free</span></span>
-        </div>
-      </div>
-
-      {/* Delete Character Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       {deleteConfirm && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
@@ -242,35 +317,15 @@ export default function Dashboard() {
           <div style={{
             background: 'var(--bg-tertiary)', border: '2px solid var(--red)',
             padding: '24px', maxWidth: '360px', width: '90%',
-            boxShadow: '0 0 40px rgba(255,0,0,0.3)',
           }}>
             <div style={{ color: '#f44', fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', textAlign: 'center' }}>
-              ⚠️ DELETE CHARACTER
+              DELETE CHARACTER
             </div>
             <div style={{ color: '#fff', fontSize: '14px', fontWeight: 'bold', textAlign: 'center', marginBottom: '12px' }}>
               {deleteConfirmName}
             </div>
-            <div style={{ color: '#ccc', fontSize: '12px', marginBottom: '16px', lineHeight: '1.6' }}>
-              This will permanently delete <strong style={{ color: '#fff' }}>{deleteConfirmName}</strong> and all their progress:
-              <ul style={{ margin: '8px 0', paddingLeft: '20px', color: '#888' }}>
-                <li>All professions and levels</li>
-                <li>Active and queued activities</li>
-                <li>Character inventory</li>
-                <li>Contracts and game logs</li>
-              </ul>
-              {characters.length <= 1 && (
-                <div style={{ color: '#f44', marginTop: '8px', padding: '8px', background: 'rgba(255,0,0,0.1)', borderRadius: '2px' }}>
-                  <strong>WARNING:</strong> This is your last character. All account data (shared storage, discoveries, achievements) will also be permanently erased.
-                </div>
-              )}
-              {characters.length > 1 && (
-                <div style={{ color: '#ff0', marginTop: '8px', padding: '8px', background: 'rgba(255,255,0,0.05)', borderRadius: '2px' }}>
-                  <strong>NOTE:</strong> Shared storage and account-level achievements will be preserved for your other characters.
-                </div>
-              )}
-              <div style={{ color: '#f44', marginTop: '12px', textAlign: 'center', fontWeight: 'bold' }}>
-                This action cannot be undone.
-              </div>
+            <div style={{ color: '#888', fontSize: '12px', marginBottom: '16px', textAlign: 'center' }}>
+              {t.settings.deleteWarning}
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-danger" style={{ flex: 1 }} onClick={() => deleteCharacter(deleteConfirm)}>
@@ -282,6 +337,15 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Intro Story */}
+      {showIntro && (
+        <IntroStory
+          characterName={introCharName}
+          originName={introOriginName}
+          onComplete={() => setShowIntro(false)}
+        />
       )}
     </div>
   )

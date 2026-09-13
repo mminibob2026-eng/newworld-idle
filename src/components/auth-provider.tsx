@@ -63,7 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     if (error) return error.message
 
-    // Profile is auto-created by DB trigger (migration 008), but insert if trigger hasn't run yet
     const { data: { user: newUser } } = await supabase.auth.getUser()
     if (newUser) {
       const { error: profileError } = await (supabase as any).from('profiles').upsert({

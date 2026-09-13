@@ -1,790 +1,918 @@
 import { createServerSupabase } from './supabase-server'
 
-const XP_FOR_LEVEL = (level: number) => Math.floor(100 * Math.pow(level, 1.5))
-
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v))
+export type GameResult = {
+  ok: boolean
+  error?: string
+  data?: any
 }
 
-const WEIGHT_THRESHOLD_GREEN = 0.4
-const WEIGHT_THRESHOLD_ORANGE = 0.65
-const WEIGHT_THRESHOLD_RED = 0.85
+// ---- ENERGY ----
 
-function weightedRoll(weights: { item: string; weight: number }[]): string | null {
-  const total = weights.reduce((s, w) => s + w.weight, 0)
-  if (total === 0) return null
-  let roll = Math.random() * total
-  for (const w of weights) {
-    roll -= w.weight
-    if (roll <= 0) return w.item
-  }
-  return null
+export async function spendEnergy(characterId: string, amount: number): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase.rpc('spend_energy' as any, {
+    p_character_id: characterId,
+    p_amount: amount,
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data }
 }
 
-function rarityQuality(attrs: { luck: number; intelligence: number }): number {
-  return (attrs.luck * 0.01 + attrs.intelligence * 0.005) / 3
+export async function recoverEnergy(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase.rpc('recover_energy' as any, {
+    p_character_id: characterId,
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data }
 }
 
-async function incrementCounter(supabase: any, accountId: string, key: string, amount: number = 1) {
-  // Use atomic increment function to avoid race conditions
-  try {
-    await (supabase as any)
-      .rpc('increment_counter', {
-        p_account_id: accountId,
-        p_key: key,
-        p_amount: amount,
-      })
-  } catch {
-    // Fallback to simple insert if function doesn't exist yet
-    await supabase
-      .from('achievement_counters')
-      .insert({ account_id: accountId, counter_key: key, value: amount })
-      .catch(() => {
-        // If insert fails (duplicate), try to update
-        supabase
-          .from('achievement_counters')
-          .select('id, value')
-          .eq('account_id', accountId)
-          .eq('counter_key', key)
-          .single()
-          .then(({ data }: any) => {
-            if (data) {
-              supabase
-                .from('achievement_counters')
-                .update({ value: data.value + amount })
-                .eq('id', data.id)
-            }
-          })
-      })
-  }
+// ---- SKILLS ----
+
+export async function addSkillXP(characterId: string, skillId: string, amount: number): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase.rpc('add_skill_xp' as any, {
+    p_character_id: characterId,
+    p_skill_id: skillId,
+    p_amount: amount,
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data }
 }
 
-async function checkAchievements(supabase: any, accountId: string) {
-  const { data: counters } = await supabase
-    .from('achievement_counters')
-    .select('*')
-    .eq('account_id', accountId)
+// ---- DAILY RESET ----
 
-  const { data: achievements } = await supabase
-    .from('content_achievements')
-    .select('*')
-
-  const { data: playerAchs } = await supabase
-    .from('player_achievements')
-    .select('*')
-    .eq('account_id', accountId)
-
-  const counterMap = Object.fromEntries((counters || []).map((c: any) => [c.counter_key, c.value]))
-  const playerMap = Object.fromEntries((playerAchs || []).map((pa: any) => [pa.achievement_id, pa]))
-
-  const newAchievements: any[] = []
-
-  for (const ach of achievements || []) {
-    if (playerMap[ach.id]) continue
-
-    const current = counterMap[ach.requirement_type] || 0
-    if (current >= ach.requirement_value) {
-      const { data: newAch } = await supabase
-        .from('player_achievements')
-        .insert({
-          account_id: accountId,
-          achievement_id: ach.id,
-          progress: current,
-          completed_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
-
-      if (newAch) newAchievements.push({ ...newAch, achievement: ach })
-    }
-  }
-
-  return newAchievements
+export async function dailyReset(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+  const { data, error } = await supabase.rpc('daily_reset' as any, {
+    p_character_id: characterId,
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data }
 }
 
-export async function processOfflineProgress(characterId: string) {
+// ---- EDUCATION ----
+
+export async function enrollEducation(characterId: string, stageId: string): Promise<GameResult> {
   const supabase = await createServerSupabase()
 
-  const { data: char } = await supabase
-    .from('characters')
+  // Check if already enrolled or completed
+  const { data: existing } = await (supabase as any)
+    .from('character_education')
     .select('*')
-    .eq('id', characterId)
+    .eq('character_id', characterId)
+    .eq('stage_id', stageId)
     .single()
 
-  if (!char) return { professions: [], explorations: [], error: 'Character not found' }
+  if (existing) return { ok: false, error: 'Already enrolled or completed' }
 
-  const results: any[] = []
-
-  const offlineMult = 1 + char.endurance * 0.02
-  const strYield = 1 + char.strength * 0.02
-  const dexSpeed = Math.max(0.1, 1 - char.dexterity * 0.01)
-
-  const { data: activeProfessions } = await supabase
-    .from('professions')
+  // Get stage data
+  const { data: stage } = await (supabase as any)
+    .from('education_stages')
     .select('*')
+    .eq('id', stageId)
+    .single()
+
+  if (!stage) return { ok: false, error: 'Education stage not found' }
+
+  // Check requirements
+  const { data: charSkills } = await (supabase as any)
+    .from('character_skills')
+    .select('skill_id, level')
     .eq('character_id', characterId)
-    .eq('is_active', true)
-    .not('finish_at', 'is', null)
-    .lt('finish_at', new Date().toISOString())
 
-  for (const prof of activeProfessions || []) {
-    // Optimistic lock: only process if still active
-    const { data: freshProf } = await supabase
-      .from('professions')
-      .select('is_active')
-      .eq('id', prof.id)
-      .single()
-    if (!freshProf || !freshProf.is_active) continue
-
-    const { data: profData } = await supabase
-      .from('content_professions')
-      .select('*')
-      .eq('id', prof.profession)
-      .single()
-
-    if (!profData) continue
-
-    const elapsedSeconds = Math.floor(
-      (Date.now() - new Date(prof.started_at!).getTime()) / 1000
-    )
-    const adjustedTime = Math.floor(profData.base_time_seconds * dexSpeed)
-    let actions = Math.floor(elapsedSeconds / adjustedTime)
-
-    const maxActions = Math.floor((24 * 3600) / adjustedTime)
-    if (actions > maxActions) actions = maxActions
-    if (actions <= 0) continue
-
-    const xpGained = Math.floor(actions * profData.base_xp_per_action * offlineMult)
-
-    const { data: rewards } = await supabase
-      .from('content_profession_rewards')
-      .select('*, content_items(*)')
-      .eq('profession_id', prof.profession)
-      .lte('min_level', prof.level)
-
-    const items: Record<string, number> = {}
-    const quality = rarityQuality(char)
-
-    for (let i = 0; i < actions; i++) {
-      if (!rewards || rewards.length === 0) continue
-
-      const weights = rewards.map((r: any) => ({
-        item: r.item_id,
-        weight: Math.max(1, Math.floor(r.weight * (1 + quality))),
-      }))
-
-      const rolled = weightedRoll(weights)
-      if (!rolled) continue
-
-      const rewardDef = rewards.find((r: any) => r.item_id === rolled)
-      if (!rewardDef) continue
-
-      const baseQty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
-      const finalQty = Math.max(1, Math.floor(baseQty * strYield * offlineMult))
-      items[rolled] = (items[rolled] || 0) + finalQty
+  if (stage.requires_level > 0) {
+    const charLevel = charSkills?.find((s: any) => s.skill_id === 'charisma')?.level || 1
+    if (charLevel < stage.requires_level) {
+      return { ok: false, error: `Requires Charisma Lv${stage.requires_level}` }
     }
-
-    for (const [itemId, qty] of Object.entries(items)) {
-      const { data: existing } = await supabase
-        .from('storage')
-        .select('*')
-        .eq('account_id', char.account_id)
-        .eq('item_type', 'item')
-        .eq('item_id', itemId)
-        .single()
-
-if (existing) {
-        await supabase
-          .from('storage')
-          .update({ quantity: existing.quantity + (qty as number) })
-          .eq('id', existing.id)
-      } else {
-        await supabase
-          .from('storage')
-          .insert({ account_id: char.account_id, item_type: 'item', item_id: itemId, quantity: qty })
-      }
-    }
-
-    const profXpNeeded = XP_FOR_LEVEL(prof.level)
-    const newProfXp = prof.xp + xpGained
-    let newProfLevel = prof.level
-    let profRemainingXp = newProfXp
-    while (profRemainingXp >= XP_FOR_LEVEL(newProfLevel)) {
-      profRemainingXp -= XP_FOR_LEVEL(newProfLevel)
-      newProfLevel++
-    }
-    const profLevelUps = newProfLevel - prof.level
-
-    await supabase
-      .from('professions')
-      .update({
-        level: newProfLevel,
-        xp: profRemainingXp,
-        is_active: false,
-        started_at: null,
-        finish_at: null,
-      })
-      .eq('id', prof.id)
-
-    const charResult = await addCharacterXp(supabase, char, xpGained)
-    if (charResult.leveledUp) {
-      // Refresh char object for next iteration
-      const { data: updatedChar } = await supabase
-        .from('characters')
-        .select('*')
-        .eq('id', characterId)
-        .single()
-      if (updatedChar) {
-        char.level = updatedChar.level
-        char.xp = updatedChar.xp
-        char.attribute_points = updatedChar.attribute_points
-        char.gold = updatedChar.gold
-      }
-    }
-
-    // Auto-start queued profession in same category if exists
-    const { data: queuedProf } = await supabase
-      .from('professions')
-      .select('*')
-      .eq('character_id', characterId)
-      .eq('category', profData.category)
-      .eq('is_queued', true)
-      .maybeSingle()
-
-    if (queuedProf) {
-      const queueDur = 30
-      const queueNow = new Date()
-      const queueFinishAt = new Date(queueNow.getTime() + queueDur * 60 * 1000)
-
-      await supabase
-        .from('professions')
-        .update({
-          is_queued: false,
-          is_active: true,
-          started_at: queueNow.toISOString(),
-          finish_at: queueFinishAt.toISOString(),
-        })
-        .eq('id', queuedProf.id)
-    }
-
-    // Track counters for achievements
-    for (const [itemId, qty] of Object.entries(items)) {
-      const itemName = itemId.toLowerCase()
-      if (itemName.includes('stone')) {
-        await incrementCounter(supabase, char.account_id, 'mine_stone', qty as number)
-      } else if (itemName.includes('wood')) {
-        await incrementCounter(supabase, char.account_id, 'chop_wood', qty as number)
-      } else if (itemName.includes('fish')) {
-        await incrementCounter(supabase, char.account_id, 'catch_fish', qty as number)
-      } else if (itemName.includes('crop') || itemName.includes('wheat') || itemName.includes('corn')) {
-        await incrementCounter(supabase, char.account_id, 'farm_crops', qty as number)
-      }
-    }
-
-    results.push({
-      type: 'profession',
-      name: profData.name,
-      actions,
-      xpGained,
-      levelUps: profLevelUps,
-      fromLevel: prof.level,
-      items,
-    })
   }
 
-  const { data: activeExplorations } = await supabase
-    .from('exploration')
-    .select('*')
-    .eq('character_id', characterId)
-    .eq('completed', false)
-    .eq('is_queued', false)
-    .not('finish_at', 'is', null)
-    .lt('finish_at', new Date().toISOString())
+  // Enroll
+  const { error } = await (supabase as any).from('character_education').insert({
+    character_id: characterId,
+    stage_id: stageId,
+    started_at: new Date().toISOString(),
+    progress: 0,
+  })
 
-  for (const exp of activeExplorations || []) {
-    // Optimistic lock: only process if still incomplete
-    const { data: freshExp } = await supabase
-      .from('exploration')
-      .select('completed')
-      .eq('id', exp.id)
-      .single()
-    if (!freshExp || freshExp.completed) continue
-
-    const { data: region } = await supabase
-      .from('content_regions')
-      .select('*')
-      .eq('id', exp.region)
-      .single()
-
-    if (!region) continue
-
-    const intBonus = 1 + char.intelligence * 0.02
-    const lckMult = 1 + char.luck * 0.01
-
-    const rollCount = Math.floor(3 * intBonus)
-
-    const { data: discoveries } = await supabase
-      .from('content_region_discoveries')
-      .select('*, content_discoveries(*)')
-      .eq('region_id', exp.region)
-
-    const found: any[] = []
-    if (discoveries) {
-      const totalWeight = discoveries.reduce((sum, d: any) => sum + d.weight, 0)
-      if (totalWeight > 0) {
-        for (let i = 0; i < rollCount; i++) {
-          const hitChance = clamp(0.4 * lckMult, 0.1, 0.9)
-          if (Math.random() > hitChance) continue
-
-          let roll = Math.floor(Math.random() * totalWeight)
-          for (const disc of discoveries) {
-            roll -= (disc as any).weight
-            if (roll < 0) {
-              found.push((disc as any).content_discoveries)
-              break
-            }
-          }
-        }
-      }
-    }
-
-    const value = found.reduce((sum: number, d: any) => sum + (d.base_value || 0), 0) * offlineMult
-
-    await supabase
-      .from('exploration')
-      .update({ completed: true, discoveries: found })
-      .eq('id', exp.id)
-
-    // Deduplicate discoveries before inserting
-    const seen = new Set<string>()
-    const uniqueFound = found.filter((d: any) => {
-      if (seen.has(d.id)) return false
-      seen.add(d.id)
-      return true
-    })
-
-    for (const d of uniqueFound) {
-      await supabase
-        .from('player_discoveries')
-        .insert({
-          account_id: char.account_id,
-          discovery_id: d.id,
-          region_id: exp.region,
-          lore: d.lore || '',
-        })
-        .select()
-        .maybeSingle()
-    }
-
-    // Track exploration counters
-    await incrementCounter(supabase, char.account_id, 'complete_exploration', 1)
-    const rareDiscs = found.filter((d: any) => ['rare', 'epic', 'legendary', 'mythic'].includes(d.rarity))
-    if (rareDiscs.length > 0) {
-      await incrementCounter(supabase, char.account_id, 'discover_rare', rareDiscs.length)
-    }
-    const mythicDiscs = found.filter((d: any) => d.rarity === 'mythic')
-    if (mythicDiscs.length > 0) {
-      await incrementCounter(supabase, char.account_id, 'find_mythic', mythicDiscs.length)
-    }
-
-    if (value > 0) {
-      char.gold += value
-      await supabase
-        .from('characters')
-        .update({ gold: char.gold })
-        .eq('id', characterId)
-
-      await supabase
-        .from('game_logs')
-        .insert({
-          account_id: char.account_id,
-          character_id: characterId,
-          action: 'offline_exploration_claim',
-          details: { region: exp.region, discoveries: found, gold: value },
-        })
-    }
-
-    // Auto-start queued exploration if exists
-    const { data: queuedExp } = await supabase
-      .from('exploration')
-      .select('*')
-      .eq('character_id', characterId)
-      .eq('is_queued', true)
-      .maybeSingle()
-
-    if (queuedExp) {
-      const dexSpeed = Math.max(0.5, 1 - char.dexterity * 0.005)
-      const { data: queuedRegion } = await supabase
-        .from('content_regions')
-        .select('exploration_base_time')
-        .eq('id', queuedExp.region)
-        .single()
-
-      if (queuedRegion) {
-        const dur = Math.floor(queuedRegion.exploration_base_time * dexSpeed)
-        const finalDur = Math.max(dur, 5)
-        const now = new Date()
-        const finishAt = new Date(now.getTime() + finalDur * 60 * 1000)
-
-        await supabase
-          .from('exploration')
-          .update({
-            is_queued: false,
-            started_at: now.toISOString(),
-            finish_at: finishAt.toISOString(),
-          })
-          .eq('id', queuedExp.id)
-      }
-    }
-
-    results.push({
-      type: 'exploration',
-      name: region.name,
-      discoveries: found,
-      gold: value,
-    })
-  }
-
-  const newAchievements = await checkAchievements(supabase, char.account_id)
-
-  return {
-    professions: results.filter(r => r.type === 'profession'),
-    explorations: results.filter(r => r.type === 'exploration'),
-    newAchievements,
-  }
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }
 
-async function addCharacterXp(supabase: any, char: any, amount: number) {
-  const newXp = char.xp + amount
-  let newLevel = char.level
-  let remainingXp = newXp
-
-  while (remainingXp >= XP_FOR_LEVEL(newLevel)) {
-    remainingXp -= XP_FOR_LEVEL(newLevel)
-    newLevel++
-  }
-
-  await supabase
-    .from('characters')
-    .update({
-      level: newLevel,
-      xp: remainingXp,
-      attribute_points: char.attribute_points + (newLevel - char.level),
-    })
-    .eq('id', char.id)
-
-  if (newLevel > char.level) {
-    try { await supabase.rpc('increment_counter', { p_account_id: char.account_id, p_key: 'reach_level', p_amount: newLevel - char.level }) } catch {}
-  }
-
-  return { leveledUp: newLevel > char.level, newLevel }
-}
-
-export async function claimProfessionRewards(characterId: string, professionId: string) {
+export async function progressEducation(characterId: string, amount: number): Promise<GameResult> {
   const supabase = await createServerSupabase()
 
-  const { data: prof } = await supabase
-    .from('professions')
+  // Get active enrollment
+  const { data: enrollment } = await (supabase as any)
+    .from('character_education')
+    .select('*, education_stages(*)')
+    .eq('character_id', characterId)
+    .eq('status', 'active')
+    .single()
+
+  if (!enrollment) return { ok: false, error: 'No active enrollment' }
+
+  const newProgress = Math.min(enrollment.progress + amount, 100)
+
+  if (newProgress >= 100) {
+    // Complete the education
+    const { error } = await (supabase as any)
+      .from('character_education')
+      .update({ status: 'completed', progress: 100 })
+      .eq('id', enrollment.id)
+
+    if (error) return { ok: false, error: error.message }
+
+    // Add the skill reward
+    if (enrollment.education_stages?.skill_reward) {
+      await addSkillXP(characterId, enrollment.education_stages.skill_reward, 500)
+    }
+
+    return { ok: true, data: { completed: true } }
+  }
+
+  const { error } = await (supabase as any)
+    .from('character_education')
+    .update({ progress: newProgress })
+    .eq('id', enrollment.id)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data: { completed: false, progress: newProgress } }
+}
+
+// ---- WORK ----
+
+export async function startWorkShift(characterId: string, jobId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check if already working
+  const { data: activeShift } = await (supabase as any)
+    .from('character_jobs')
     .select('*')
     .eq('character_id', characterId)
-    .eq('profession', professionId)
+    .eq('status', 'working')
     .single()
 
-  if (!prof || !prof.is_active) throw new Error('No active profession session')
+  if (activeShift) return { ok: false, error: 'Already working a shift' }
 
-  const now = new Date()
-  if (new Date(prof.finish_at!) > now) throw new Error('Session still in progress')
-
-  const { data: char } = await supabase
-    .from('characters')
+  // Check if job is unlocked
+  const { data: job } = await (supabase as any)
+    .from('jobs')
     .select('*')
-    .eq('id', characterId)
+    .eq('id', jobId)
     .single()
 
-  if (!char) throw new Error('Character not found')
+  if (!job) return { ok: false, error: 'Job not found' }
 
-  const { data: profData } = await supabase
-    .from('content_professions')
+  const { data: charJobs } = await (supabase as any)
+    .from('character_jobs')
     .select('*')
-    .eq('id', professionId)
-    .single()
+    .eq('character_id', characterId)
+    .eq('job_id', jobId)
 
-  if (!profData) throw new Error('Profession data not found')
+  if (charJobs && charJobs.length > 0) {
+    // Already have this job, start a shift
+    const { error } = await (supabase as any).from('character_jobs').update({
+      status: 'working',
+      shift_start: new Date().toISOString(),
+    }).eq('id', charJobs[0].id)
 
-  const elapsedSeconds = Math.floor((now.getTime() - new Date(prof.started_at!).getTime()) / 1000)
-
-  const dexSpeed = Math.max(0.1, 1 - char.dexterity * 0.01)
-  const adjustedTime = Math.floor(profData.base_time_seconds * dexSpeed)
-
-  let actions = Math.floor(elapsedSeconds / adjustedTime)
-  const maxActions = Math.floor((24 * 3600) / adjustedTime)
-  if (actions > maxActions) actions = maxActions
-  if (actions <= 0) throw new Error('No time elapsed')
-
-  const strYield = 1 + char.strength * 0.02
-  const xpGained = Math.floor(actions * profData.base_xp_per_action)
-
-  const profXpNeeded = XP_FOR_LEVEL(prof.level)
-  const newProfXp = prof.xp + xpGained
-  let newProfLevel = prof.level
-  let profRemainingXp = newProfXp
-  while (profRemainingXp >= XP_FOR_LEVEL(newProfLevel)) {
-    profRemainingXp -= XP_FOR_LEVEL(newProfLevel)
-    newProfLevel++
-  }
-  const profLevelUps = newProfLevel - prof.level
-
-  const { data: rewards } = await supabase
-    .from('content_profession_rewards')
-    .select('*, content_items(*)')
-    .eq('profession_id', professionId)
-    .lte('min_level', prof.level)
-
-  const items: Record<string, { name: string; qty: number; rarity: string }> = {}
-  const quality = rarityQuality(char)
-
-  for (let i = 0; i < actions; i++) {
-    if (!rewards || rewards.length === 0) continue
-
-    const weights = rewards.map((r: any) => ({
-      item: r.item_id,
-      weight: Math.max(1, Math.floor(r.weight * (1 + quality))),
-    }))
-
-    const rolled = weightedRoll(weights)
-    if (!rolled) continue
-
-    const rewardDef = rewards.find((r: any) => r.item_id === rolled)
-    if (!rewardDef) continue
-
-    const baseQty = Math.floor(Math.random() * (rewardDef.max_qty - rewardDef.min_qty + 1)) + rewardDef.min_qty
-    const finalQty = Math.max(1, Math.floor(baseQty * strYield))
-    if (items[rolled]) {
-      items[rolled].qty += finalQty
-    } else {
-      items[rolled] = {
-        name: rewardDef.content_items?.name || rolled,
-        qty: finalQty,
-        rarity: rewardDef.content_items?.rarity || 'common',
-      }
-    }
-  }
-
-  for (const [itemId, info] of Object.entries(items)) {
-    const { data: existing } = await supabase
-      .from('storage')
-      .select('*')
-      .eq('account_id', char.account_id)
-      .eq('item_type', 'item')
-      .eq('item_id', itemId)
-      .single()
-
-    if (existing) {
-      await supabase
-        .from('storage')
-        .update({ quantity: existing.quantity + info.qty })
-        .eq('id', existing.id)
-    } else {
-      await supabase
-        .from('storage')
-        .insert({ account_id: char.account_id, item_type: 'item', item_id: itemId, quantity: info.qty })
-    }
-  }
-
-await supabase
-      .from('professions')
-      .update({
-        level: newProfLevel,
-        xp: profRemainingXp,
-        is_active: false,
-        started_at: null,
-        finish_at: null,
-      })
-      .eq('id', prof.id)
-
-  // Check for queued profession in same category and auto-start it
-  const queuedCategory = profData?.category
-  if (queuedCategory) {
-    const { data: queued } = await supabase
-      .from('professions')
-      .select('*')
-      .eq('character_id', characterId)
-      .eq('category', queuedCategory)
-      .eq('is_queued', true)
-      .maybeSingle()
-
-    if (queued) {
-      const queueDur = 30
-      const queueNow = new Date()
-      const queueFinishAt = new Date(queueNow.getTime() + queueDur * 60 * 1000)
-
-      await supabase
-        .from('professions')
-        .update({
-          is_queued: false,
-          is_active: true,
-          started_at: queueNow.toISOString(),
-          finish_at: queueFinishAt.toISOString(),
-        })
-        .eq('id', queued.id)
-
-      await supabase.from('game_logs').insert({
-        account_id: char.account_id,
-        character_id: characterId,
-        action: 'auto_start_queued',
-        details: { profession: queued.profession, category: queuedCategory },
-      })
-    }
-  }
-
-  // Track counters
-  for (const [itemId, info] of Object.entries(items)) {
-    const itemName = itemId.toLowerCase()
-    if (itemName.includes('stone')) {
-      await incrementCounter(supabase, char.account_id, 'mine_stone', (info as any).qty)
-    } else if (itemName.includes('wood')) {
-      await incrementCounter(supabase, char.account_id, 'chop_wood', (info as any).qty)
-    } else if (itemName.includes('fish')) {
-      await incrementCounter(supabase, char.account_id, 'catch_fish', (info as any).qty)
-    } else if (itemName.includes('crop') || itemName.includes('wheat') || itemName.includes('corn')) {
-      await incrementCounter(supabase, char.account_id, 'farm_crops', (info as any).qty)
-    }
-  }
-
-  const charResult = await addCharacterXp(supabase, char, xpGained)
-
-  await supabase
-    .from('game_logs')
-    .insert({
-      account_id: char.account_id,
+    if (error) return { ok: false, error: error.message }
+  } else {
+    // New job - start first shift
+    const { error } = await (supabase as any).from('character_jobs').insert({
       character_id: characterId,
-      action: 'claim_profession',
-      details: { profession: professionId, actions, xp_gained: xpGained, items_gained: items },
+      job_id: jobId,
+      status: 'working',
+      shift_start: new Date().toISOString(),
+      days_worked: 0,
     })
 
-  const newAchievements = await checkAchievements(supabase, char.account_id)
+    if (error) return { ok: false, error: error.message }
+  }
 
-  return { actions, xpGained, levelUps: profLevelUps, items, charLeveledUp: charResult.leveledUp, newCharLevel: charResult.newLevel, newAchievements }
+  return { ok: true }
 }
 
-export async function completeContract(contractId: string) {
+export async function finishWorkShift(characterId: string): Promise<GameResult> {
   const supabase = await createServerSupabase()
 
-  const { data: contract } = await supabase
-    .from('contracts')
+  const { data: shift } = await (supabase as any)
+    .from('character_jobs')
+    .select('*, jobs(*)')
+    .eq('character_id', characterId)
+    .eq('status', 'working')
+    .single()
+
+  if (!shift) return { ok: false, error: 'No active shift' }
+
+  // Calculate XP based on job and shift time
+  const shiftDuration = Date.now() - new Date(shift.shift_start).getTime()
+  const shiftHours = shiftDuration / (1000 * 60 * 60)
+  const baseXP = shift.jobs?.base_xp || 10
+  const xpEarned = Math.floor(baseXP * Math.min(shiftHours, 8) / 8)
+
+  // Update shift
+  const { error } = await (supabase as any).from('character_jobs').update({
+    status: 'idle',
+    days_worked: shift.days_worked + 1,
+    last_worked: new Date().toISOString(),
+  }).eq('id', shift.id)
+
+  if (error) return { ok: false, error: error.message }
+
+  // Add XP to the job's skill
+  if (shift.jobs?.skill_id) {
+    await addSkillXP(characterId, shift.jobs.skill_id, xpEarned)
+  }
+
+  return { ok: true, data: { xpEarned, jobId: shift.job_id } }
+}
+
+// ---- TRAINING ----
+
+export async function trainSkill(characterId: string, skillId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check if already training
+  const { data: activeTraining } = await (supabase as any)
+    .from('character_training')
     .select('*')
-    .eq('id', contractId)
+    .eq('character_id', characterId)
+    .eq('status', 'training')
     .single()
 
-  if (!contract || contract.completed) throw new Error('Contract not found or already completed')
-  if (new Date(contract.expires_at) < new Date()) throw new Error('Contract expired')
+  if (activeTraining) return { ok: false, error: 'Already training' }
 
-  const { data: char } = await supabase
-    .from('characters')
+  // Get skill data to determine XP
+  const { data: skill } = await (supabase as any)
+    .from('skills')
     .select('*')
-    .eq('id', contract.character_id)
+    .eq('id', skillId)
     .single()
 
-  if (!char) throw new Error('Character not found')
+  if (!skill) return { ok: false, error: 'Skill not found' }
 
-  // Daily limit check - read fresh data to avoid race conditions
-  const { data: freshChar } = await supabase
-    .from('characters')
-    .select('contracts_completed_today, contracts_reset_date')
-    .eq('id', contract.character_id)
-    .single()
-  
-  const today = new Date().toLocaleDateString('en-CA')
-  let completedToday = freshChar?.contracts_completed_today ?? char.contracts_completed_today
-  let resetDate = freshChar?.contracts_reset_date ?? char.contracts_reset_date
+  // Start training
+  const { error } = await (supabase as any).from('character_training').insert({
+    character_id: characterId,
+    skill_id: skillId,
+    status: 'training',
+    started_at: new Date().toISOString(),
+  })
 
-  // Reset counter if a new day
-  if (resetDate < today) {
-    completedToday = 0
-    resetDate = today
-  }
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
 
-  if (completedToday >= 12) {
-    throw new Error('Daily contract limit reached (12/12). Come back tomorrow.')
-  }
+export async function finishTraining(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
 
-  const { data: storageItem } = await supabase
-    .from('storage')
+  const { data: training } = await (supabase as any)
+    .from('character_training')
     .select('*')
-    .eq('account_id', char.account_id)
-    .eq('item_type', 'item')
-    .eq('item_id', contract.requirement_item)
+    .eq('character_id', characterId)
+    .eq('status', 'training')
     .single()
 
-  if (!storageItem || storageItem.quantity < contract.requirement_qty) {
-    throw new Error('Not enough resources')
-  }
+  if (!training) return { ok: false, error: 'No active training' }
 
-  // Level scaling: higher-level characters get better rewards
-  const levelScale = 1 + char.level * 0.05
-  const chaBonus = 1 + char.charisma * 0.02
-  const goldReward = Math.floor(contract.reward_gold * chaBonus * levelScale)
-  const kpReward = contract.reward_knowledge > 0
-    ? Math.floor(contract.reward_knowledge * (1 + char.intelligence * 0.02) * levelScale)
-    : 0
+  // Calculate XP
+  const duration = Date.now() - new Date(training.started_at).getTime()
+  const minutes = duration / (1000 * 60)
+  const xpEarned = Math.floor(minutes * 2) // 2 XP per minute
 
-  await supabase
-    .from('storage')
-    .update({ quantity: storageItem.quantity - contract.requirement_qty })
-    .eq('id', storageItem.id)
+  // End training
+  const { error } = await (supabase as any).from('character_training').update({
+    status: 'completed',
+    xp_earned: xpEarned,
+  }).eq('id', training.id)
 
-  // Re-read latest character data right before writing to avoid race conditions
-  const { data: latestChar } = await supabase
-    .from('characters')
-    .select('contracts_completed_today, contracts_reset_date, gold, knowledge')
-    .eq('id', contract.character_id)
+  if (error) return { ok: false, error: error.message }
+
+  // Add XP
+  await addSkillXP(characterId, training.skill_id, xpEarned)
+
+  return { ok: true, data: { xpEarned, skillId: training.skill_id } }
+}
+
+// ---- ADVENTURES ----
+
+export async function startAdventure(characterId: string, adventureId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check energy
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
     .single()
 
-  const latestCompleted = latestChar?.contracts_completed_today ?? completedToday
-  const latestReset = latestChar?.contracts_reset_date ?? resetDate
-  const effectiveCompleted = latestReset < today ? 0 : latestCompleted
-  const effectiveReset = latestReset < today ? today : latestReset
-
-  await supabase
-    .from('characters')
-    .update({
-      gold: (latestChar?.gold || char.gold) + goldReward,
-      knowledge: (latestChar?.knowledge || char.knowledge) + kpReward,
-      contracts_completed_today: effectiveCompleted + 1,
-      contracts_reset_date: effectiveReset,
-    })
-    .eq('id', contract.character_id)
-
-  await supabase
-    .from('contracts')
-    .update({ completed: true })
-    .eq('id', contractId)
-
-  await supabase
-    .from('game_logs')
-    .insert({
-      account_id: char.account_id,
-      character_id: contract.character_id,
-      action: 'complete_contract',
-      details: { contract_id: contractId, item: contract.requirement_item, qty: contract.requirement_qty, gold: goldReward, kp: kpReward },
-    })
-
-  // Track counters
-  await incrementCounter(supabase, char.account_id, 'complete_contract', 1)
-  await incrementCounter(supabase, char.account_id, 'earn_gold', goldReward)
-  await incrementCounter(supabase, char.account_id, 'spend_gold', contract.requirement_qty * 2) // approximate item value
-
-  const newAchievements = await checkAchievements(supabase, char.account_id)
-
-  const remaining = 12 - (completedToday + 1)
-
-  return {
-    gold: goldReward,
-    knowledge: kpReward,
-    contractsCompletedToday: completedToday + 1,
-    contractsRemainingToday: remaining,
-    contractsMaxDaily: 12,
-    contractsResetDate: resetDate,
-    newAchievements,
+  if (!char || char.energy < 10) {
+    return { ok: false, error: 'Not enough energy (need 10)' }
   }
+
+  // Spend energy
+  const energyResult = await spendEnergy(characterId, 10)
+  if (!energyResult.ok) return energyResult
+
+  // Get adventure data
+  const { data: adventure } = await (supabase as any)
+    .from('adventures')
+    .select('*')
+    .eq('id', adventureId)
+    .single()
+
+  if (!adventure) return { ok: false, error: 'Adventure not found' }
+
+  // Create adventure record
+  const { data: adventureRecord, error } = await (supabase as any).from('character_adventures').insert({
+    character_id: characterId,
+    adventure_id: adventureId,
+    status: 'in_progress',
+    started_at: new Date().toISOString(),
+  }).select().single()
+
+  if (error) return { ok: false, error: error.message }
+
+  return { ok: true, data: { adventureId: adventureRecord.id } }
+}
+
+export async function resolveAdventure(characterId: string, recordId: string, choiceIndex: number): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: record } = await (supabase as any)
+    .from('character_adventures')
+    .select('*, adventures(*)')
+    .eq('id', recordId)
+    .single()
+
+  if (!record) return { ok: false, error: 'Adventure record not found' }
+
+  const adventure = record.adventures
+  if (!adventure) return { ok: false, error: 'Adventure data not found' }
+
+  // Get character origin for event modifiers
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('origin_id')
+    .eq('id', characterId)
+    .single()
+
+  const origin = char?.origin_id || 'middle'
+
+  // Determine outcome based on choices
+  const choice = adventure.choices?.[choiceIndex] || adventure.choices?.[0]
+  const successChance = choice?.successChance || 50
+  const roll = Math.random() * 100
+  const success = roll < successChance
+
+  const xpReward = success ? (choice?.xp_reward || 50) : Math.floor((choice?.xp_reward || 50) * 0.3)
+
+  // Origin-based event modifiers
+  let bonusGold = 0
+  let bonusEvent = null
+
+  if (origin === 'wealthy') {
+    // Wealthy families: 30% chance of money from parents during adventure
+    if (Math.random() < 0.3) {
+      bonusGold = 100 + Math.floor(Math.random() * 200)
+      bonusEvent = {
+        type: 'family_support',
+        description_zh: '你的家人在冒险途中给了你一些钱',
+        description_en: 'Your family gave you some money during the adventure',
+        gold: bonusGold,
+      }
+    }
+  } else if (origin === 'humble') {
+    // Humble families: 15% chance of small help
+    if (Math.random() < 0.15) {
+      bonusGold = 20 + Math.floor(Math.random() * 30)
+      bonusEvent = {
+        type: 'family_help',
+        description_zh: '你的家人省吃俭用给了你一点钱',
+        description_en: 'Your family saved up to give you a little money',
+        gold: bonusGold,
+      }
+    }
+  }
+
+  // Apply XP reward
+  if (xpReward > 0) {
+    await addSkillXP(characterId, adventure.skill_id || 'perception', xpReward)
+  }
+
+  // Apply bonus gold
+  if (bonusGold > 0) {
+    await (supabase as any).from('new_characters').update({
+      gold: (char.gold || 0) + bonusGold,
+    }).eq('id', characterId)
+  }
+
+  // Create outcome
+  const outcome = {
+    success,
+    xp_reward: xpReward,
+    bonus_event: bonusEvent,
+  }
+
+  // Update record
+  const { error } = await (supabase as any).from('character_adventures').update({
+    status: success ? 'success' : 'failed',
+    outcome: outcome,
+    completed_at: new Date().toISOString(),
+  }).eq('id', recordId)
+
+  if (error) return { ok: false, error: error.message }
+
+  return { ok: true, data: { outcome, bonusEvent } }
+}
+
+// ---- FAMILY: PARTNER ----
+
+export async function findPartner(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check if already has partner
+  const { data: existing } = await (supabase as any)
+    .from('character_partners')
+    .select('*')
+    .eq('character_id', characterId)
+    .eq('status', 'married')
+    .single()
+
+  if (existing) return { ok: false, error: 'Already married' }
+
+  // Check energy
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy, charisma')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 20) return { ok: false, error: 'Need 20 energy' }
+
+  // Spend energy
+  await spendEnergy(characterId, 20)
+
+  // Generate NPC partner
+  const { generateNPCName } = await import('./game-data')
+  const locale = 'zh'
+  const name = generateNPCName(locale)
+  const loyalty = 50 + Math.floor(Math.random() * 30)
+  const happiness = 60 + Math.floor(Math.random() * 20)
+
+  // Create partner
+  const { data: partner, error } = await (supabase as any).from('character_partners').insert({
+    character_id: characterId,
+    npc_name: name,
+    status: 'dating',
+    loyalty,
+    happiness,
+    met_at: new Date().toISOString(),
+  }).select().single()
+
+  if (error) return { ok: false, error: error.message }
+
+  return { ok: true, data: { partner } }
+}
+
+export async function advanceRelationship(characterId: string, partnerId: string, stage: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { error } = await (supabase as any).from('character_partners').update({
+    status: stage,
+  }).eq('id', partnerId).eq('character_id', characterId)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// ---- FAMILY: PARENTS ----
+
+export async function createParents(characterId: string, originId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Orphans don't have parents
+  if (originId === 'orphan') return { ok: true }
+
+  // Check if parents already exist
+  const { data: existing } = await (supabase as any)
+    .from('character_parents')
+    .select('*')
+    .eq('character_id', characterId)
+    .limit(2)
+
+  if (existing && existing.length > 0) return { ok: true }
+
+  const { generateNPCName, PARENT_OCCUPATIONS, PARENT_PERSONALITIES } = await import('./game-data')
+
+  // Determine wealth tier based on origin
+  const wealthTier = originId === 'wealthy' ? 'high' : originId === 'humble' ? 'low' : 'medium'
+
+  // Filter occupations by wealth
+  const availableOccupations = PARENT_OCCUPATIONS.filter(o =>
+    wealthTier === 'high' ? true :
+    wealthTier === 'medium' ? o.wealth !== 'high' :
+    o.wealth === 'low'
+  )
+
+  // Generate father
+  const fatherOcc = availableOccupations[Math.floor(Math.random() * availableOccupations.length)]
+  const fatherPersonality = PARENT_PERSONALITIES[Math.floor(Math.random() * PARENT_PERSONALITIES.length)]
+  const fatherName = generateNPCName('zh')
+  const fatherAge = 25 + Math.floor(Math.random() * 15)
+
+  // Generate mother
+  const motherOcc = availableOccupations[Math.floor(Math.random() * availableOccupations.length)]
+  const motherPersonality = PARENT_PERSONALITIES[Math.floor(Math.random() * PARENT_PERSONALITIES.length)]
+  const motherName = generateNPCName('zh')
+  const motherAge = 22 + Math.floor(Math.random() * 12)
+
+  // Create parents
+  const { error } = await (supabase as any).from('character_parents').insert([
+    {
+      character_id: characterId,
+      npc_name: fatherName,
+      relationship: 'father',
+      occupation: fatherOcc.id,
+      personality: fatherPersonality.id,
+      age_at_birth: fatherAge,
+      current_age: fatherAge,
+      loyalty: 60 + Math.floor(Math.random() * 30),
+      alive: true,
+    },
+    {
+      character_id: characterId,
+      npc_name: motherName,
+      relationship: 'mother',
+      occupation: motherOcc.id,
+      personality: motherPersonality.id,
+      age_at_birth: motherAge,
+      current_age: motherAge,
+      loyalty: 70 + Math.floor(Math.random() * 25),
+      alive: true,
+    },
+  ])
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function visitParent(characterId: string, parentId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 10) return { ok: false, error: 'Need 10 energy' }
+
+  await spendEnergy(characterId, 10)
+
+  const { PARENT_PERSONALITIES } = await import('./game-data')
+
+  const { data: parent } = await (supabase as any)
+    .from('character_parents')
+    .select('*')
+    .eq('id', parentId)
+    .single()
+
+  if (!parent) return { ok: false, error: 'Parent not found' }
+
+  const personality = PARENT_PERSONALITIES.find(p => p.id === parent.personality)
+  const loyaltyGain = Math.floor(5 + (personality?.helpChance || 0) * 10)
+  const happinessGain = Math.floor(3 + Math.random() * 5)
+
+  const { error } = await (supabase as any).from('character_parents').update({
+    loyalty: Math.min(100, parent.loyalty + loyaltyGain),
+  }).eq('id', parentId)
+
+  if (error) return { ok: false, error: error.message }
+
+  // Random event
+  const eventRoll = Math.random()
+  let event = null
+  if (eventRoll < 0.3) {
+    // Parent gives money
+    const goldAmount = 50 + Math.floor(Math.random() * 100)
+    await (supabase as any).from('new_characters').update({
+      gold: (char.gold || 0) + goldAmount,
+    }).eq('id', characterId)
+    event = { type: 'gift', gold: goldAmount }
+  } else if (eventRoll < 0.5) {
+    // Parent helps study
+    event = { type: 'help', skill: 'intelligence' }
+  } else {
+    // Just chatting
+    event = { type: 'chat' }
+  }
+
+  return { ok: true, data: { loyaltyGain, happinessGain, event } }
+}
+
+export async function parentHelp(characterId: string, parentId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 15) return { ok: false, error: 'Need 15 energy' }
+
+  await spendEnergy(characterId, 15)
+
+  const { PARENT_PERSONALITIES } = await import('./game-data')
+
+  const { data: parent } = await (supabase as any)
+    .from('character_parents')
+    .select('*')
+    .eq('id', parentId)
+    .single()
+
+  if (!parent) return { ok: false, error: 'Parent not found' }
+
+  const personality = PARENT_PERSONALITIES.find(p => p.id === parent.personality)
+  const helpChance = personality?.helpChance || 0.5
+
+  if (Math.random() < helpChance) {
+    // Help succeeded - boost a random skill
+    const skills = ['intelligence', 'charisma', 'engineering', 'cooking', 'fitness']
+    const randomSkill = skills[Math.floor(Math.random() * skills.length)]
+    await addSkillXP(characterId, randomSkill, 300)
+
+    return { ok: true, data: { helped: true, skill: randomSkill } }
+  }
+
+  return { ok: true, data: { helped: false } }
+}
+
+export async function parentInherit(characterId: string, parentId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: parent } = await (supabase as any)
+    .from('character_parents')
+    .select('*')
+    .eq('id', parentId)
+    .single()
+
+  if (!parent) return { ok: false, error: 'Parent not found' }
+  if (!parent.alive) return { ok: false, error: 'Parent already passed away' }
+
+  const { PARENT_PERSONALITIES, PARENT_OCCUPATIONS } = await import('./game-data')
+  const personality = PARENT_PERSONALITIES.find(p => p.id === parent.personality)
+  const occupation = PARENT_OCCUPATIONS.find(o => o.id === parent.occupation)
+
+  const baseInheritance = occupation?.wealth === 'high' ? 500 : occupation?.wealth === 'medium' ? 200 : 50
+  const goldAmount = Math.floor(baseInheritance * (personality?.inheritance || 1.0))
+
+  // Mark parent as passed
+  const { error } = await (supabase as any).from('character_parents').update({
+    alive: false,
+  }).eq('id', parentId)
+
+  if (error) return { ok: false, error: error.message }
+
+  // Give inheritance
+  const { error: goldErr } = await (supabase as any).from('new_characters').update({
+    gold: (parent.gold || 0) + goldAmount,
+  }).eq('id', characterId)
+
+  if (goldErr) return { ok: false, error: goldErr.message }
+
+  return { ok: true, data: { gold: goldAmount } }
+}
+
+// ---- FAMILY: PET ----
+
+export async function adoptPet(characterId: string, breedId: string, petName: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check if already has pet
+  const { data: existing } = await (supabase as any)
+    .from('character_pets')
+    .select('*')
+    .eq('character_id', characterId)
+    .in('status', ['alive', 'young', 'adult'])
+    .single()
+
+  if (existing) return { ok: false, error: 'Already have a pet' }
+
+  // Check energy
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 15) return { ok: false, error: 'Need 15 energy' }
+
+  await spendEnergy(characterId, 15)
+
+  const { PET_BREEDS } = await import('./game-data')
+  const breed = PET_BREEDS.find(b => b.id === breedId)
+  if (!breed) return { ok: false, error: 'Invalid breed' }
+
+  const { data: pet, error } = await (supabase as any).from('character_pets').insert({
+    character_id: characterId,
+    breed_id: breedId,
+    name: petName,
+    status: 'young',
+    happiness: breed.baseStats.happiness,
+    loyalty: breed.baseStats.loyalty,
+    energy: breed.baseStats.energy,
+    adopted_at: new Date().toISOString(),
+  }).select().single()
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, data: { pet } }
+}
+
+export async function feedPet(characterId: string, petId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 5) return { ok: false, error: 'Need 5 energy' }
+
+  await spendEnergy(characterId, 5)
+
+  const { error } = await (supabase as any).from('character_pets').update({
+    happiness: Math.min(100, undefined as any + 15),
+    energy: Math.min(100, undefined as any + 10),
+  }).eq('id', petId).eq('character_id', characterId)
+
+  if (error) {
+    // Fallback: just update
+    await (supabase as any).from('character_pets').update({
+      happiness: 100,
+    }).eq('id', petId)
+  }
+
+  return { ok: true }
+}
+
+export async function trainPet(characterId: string, petId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 10) return { ok: false, error: 'Need 10 energy' }
+
+  await spendEnergy(characterId, 10)
+
+  const { error } = await (supabase as any).from('character_pets').update({
+    loyalty: Math.min(100, 50 + 10),
+  }).eq('id', petId).eq('character_id', characterId)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// ---- COMBAT ----
+
+export async function startCombat(characterId: string, enemyId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check energy
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy, strength, dexterity, endurance')
+    .eq('id', characterId)
+    .single()
+
+  if (!char || char.energy < 15) return { ok: false, error: 'Need 15 energy' }
+
+  await spendEnergy(characterId, 15)
+
+  const { ENEMIES } = await import('./game-data')
+  const enemy = ENEMIES.find(e => e.id === enemyId)
+  if (!enemy) return { ok: false, error: 'Invalid enemy' }
+
+  // Simple combat calculation
+  const playerDamage = Math.max(1, (char.strength || 1) * 2 + Math.floor(Math.random() * 10))
+  const enemyDamage = Math.max(1, enemy.attack - (char.endurance || 1))
+  const playerWins = playerDamage > enemyDamage || Math.random() > 0.5
+
+  const xpReward = playerWins ? enemy.xpReward : Math.floor(enemy.xpReward * 0.3)
+  const goldReward = playerWins ? enemy.goldReward : 0
+
+  // Create combat record
+  const { data: record, error } = await (supabase as any).from('character_combat').insert({
+    character_id: characterId,
+    enemy_id: enemyId,
+    player_damage: playerDamage,
+    enemy_damage: enemyDamage,
+    result: playerWins ? 'victory' : 'defeat',
+    xp_earned: xpReward,
+    gold_earned: goldReward,
+    fought_at: new Date().toISOString(),
+  }).select().single()
+
+  if (error) return { ok: false, error: error.message }
+
+  // Add XP if won
+  if (playerWins && xpReward > 0) {
+    await addSkillXP(characterId, 'striking', xpReward)
+  }
+
+  return { ok: true, data: { record, playerDamage, enemyDamage, playerWins, xpReward, goldReward } }
+}
+
+// ---- TALENTS ----
+
+export async function revealTalent(characterId: string, talentId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Check if already revealed
+  const { data: existing } = await (supabase as any)
+    .from('character_talents')
+    .select('*')
+    .eq('character_id', characterId)
+    .eq('talent_id', talentId)
+    .single()
+
+  if (existing) return { ok: false, error: 'Talent already revealed' }
+
+  const { error } = await (supabase as any).from('character_talents').insert({
+    character_id: characterId,
+    talent_id: talentId,
+    revealed_at: new Date().toISOString(),
+    active: true,
+  })
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// ---- DAILY RESET (enhanced) ----
+
+export async function dailyResetEnhanced(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  // Reset energy to 100
+  const { error: energyErr } = await (supabase as any)
+    .from('new_characters')
+    .update({ energy: 100 })
+    .eq('id', characterId)
+
+  if (energyErr) return { ok: false, error: energyErr.message }
+
+  // Reset daily states
+  await (supabase as any)
+    .from('character_jobs')
+    .update({ status: 'idle' })
+    .eq('character_id', characterId)
+    .eq('status', 'working')
+
+  await (supabase as any)
+    .from('character_training')
+    .update({ status: 'completed' })
+    .eq('character_id', characterId)
+    .eq('status', 'training')
+
+  return { ok: true }
+}
+
+// ---- OFFLINE ENERGY RECOVERY ----
+
+export async function recoverOfflineEnergy(characterId: string): Promise<GameResult> {
+  const supabase = await createServerSupabase()
+
+  const { data: char } = await (supabase as any)
+    .from('new_characters')
+    .select('energy, last_recovery_at')
+    .eq('id', characterId)
+    .single()
+
+  if (!char) return { ok: false, error: 'Character not found' }
+
+  const { energyRecoveredSince } = await import('./game-data')
+  const recovered = energyRecoveredSince(char.last_recovery_at || new Date().toISOString(), char.energy || 0)
+
+  if (recovered > 0) {
+    const newEnergy = Math.min(100, (char.energy || 0) + recovered)
+    const { error } = await (supabase as any)
+      .from('new_characters')
+      .update({ energy: newEnergy, last_recovery_at: new Date().toISOString() })
+      .eq('id', characterId)
+
+    if (error) return { ok: false, error: error.message }
+    return { ok: true, data: { recovered, newEnergy } }
+  }
+
+  return { ok: true, data: { recovered: 0, newEnergy: char.energy } }
 }
